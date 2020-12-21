@@ -322,10 +322,10 @@ class Strategy(StrategyBase):
         previous_price = 0
         avg_up = 0
         avg_down = 0
-        x = length - n
+        x = n
         while x > 0:
-            previous_price = symbol[x-1]
-            current_price = symbol[x]
+            previous_price = symbol[-x-1]
+            current_price = symbol[-x]
             if current_price > previous_price:
                 avg_up += current_price - previous_price
             else:
