@@ -19,6 +19,22 @@ https://github.com/MarginOpenSource/strategy-template.
 Also check out the official strategies by margin at
 https://github.com/MarginOpenSource/official-strategies
 
+## Contributing
+
+Once you created you strategy and would like to share it with the margin community, please follow this
+[guide on contributing to open source projects on Github](https://opensource.com/article/19/7/create-pull-request-github).
+
+Specifically for this repository you should put your strategy into a
+new file in the folder `margin_community_strategies` and give it a speaking name.
+
+The python file should start with a docstring containing a description of the strategy and its functionality.
+Also provide information about any settings that have to be adapted in the strategy before running it.
+These should also be in variables on the top that are easily visible for the user and each be described by a doc string.
+Please also remove the default documentations from the [strategy template](https://github.com/MarginOpenSource/strategy-template
+and add documentation where you deem necessary.
+Also remove all functions from the strategy that are not used and don't subscribe to any data that is not required.
+
+
 ## License
 The source code is published under the MIT License:
 
