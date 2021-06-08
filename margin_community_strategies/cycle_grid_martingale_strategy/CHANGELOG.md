@@ -1,7 +1,10 @@
-## v0.5b - 2021-06-07
+## v0.5b - 2021-06-08
 ### Added for new features.
 * Calculate price of grid orders by logarithmic scale
 * Add cycle result data for save into t_funds
+
+### Update
+* Readme.md
 
 ### Fixed
 * Refactoring and optimise calculate and place take profit order

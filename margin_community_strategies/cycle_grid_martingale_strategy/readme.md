@@ -1,5 +1,6 @@
 # Cyclic grid strategy based on martingale
 
+
 ## The motto of the project
 
 **_Started and forgot_**
