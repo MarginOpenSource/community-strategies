@@ -769,13 +769,13 @@ class Strategy(StrategyBase):
                     fact_amount_first += market_order[i].amount
                     fact_amount_second += market_order[i].amount * market_order[i].price
             self.avg_rate = fact_amount_second / fact_amount_first
-            if FEE_IN_PAIR:
-                if self.cycle_buy:
-                    fact_amount_first -= FEE_TAKER * fact_amount_first / 100
-                else:
-                    fact_amount_second -= FEE_TAKER * fact_amount_second / 100
             if place_order_id in self.grid_orders_id:
                 self.message_log('Grid order {} execute by market'.format(order.id))
+                if FEE_IN_PAIR:
+                    if self.cycle_buy:
+                        fact_amount_first -= FEE_TAKER * fact_amount_first / 100
+                    else:
+                        fact_amount_second -= FEE_TAKER * fact_amount_second / 100
                 # Calculate cycle sum trading for both currency
                 self.sum_amount_first += fact_amount_first
                 self.sum_amount_second += fact_amount_second
@@ -788,6 +788,11 @@ class Strategy(StrategyBase):
                 self.place_profit_order(by_market=True)
             elif place_order_id == self.tp_wait_id:
                 self.message_log('Take profit order {} execute by market'.format(order.id))
+                if FEE_IN_PAIR:
+                    if not self.cycle_buy:
+                        fact_amount_first -= FEE_TAKER * fact_amount_first / 100
+                    else:
+                        fact_amount_second -= FEE_TAKER * fact_amount_second / 100
                 # Take profit order execute by market, restart
                 self.tp_wait_id = None
                 self.tp_order_id = None
