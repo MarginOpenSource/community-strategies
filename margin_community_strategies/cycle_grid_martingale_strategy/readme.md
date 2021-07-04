@@ -3,9 +3,19 @@
 
 ## The motto of the project
 
-**_Started and forgot_**
+**_Profitable, fault-tolerant, adaptable to the market. Started and forgot._**
+*Don't forget to pick up what you earned.*
 
-Regardless of exchange overloads, network connection lost, hardware fault.
+Regardless of any trend, exchange overloads, network connection lost, hardware fault.
+
+## Disclaimer
+
+All risks and possible losses associated with use of this strategy lie with you.
+Strongly recommended that you test the strategy in the demo mode before using real bidding.
+
+## Initial setup
+
+All information and setup parameters at the top of martin_scale.py
 
 ## Reference
 
@@ -25,6 +35,8 @@ Regardless of exchange overloads, network connection lost, hardware fault.
 
 [Target](#target)
 
+[Referral](#referral-code)
+
 Communication with the author and support in [margin group on Discord](https://discord.com/channels/600652551486177292/601329819371831296)
 
 ## Trade idea
@@ -38,21 +50,33 @@ What is the chip? After each grid order executed, the price of the take profit o
 approaches the price of the grid, which requires less bounce to perform it.
 
 If all grid orders filled, then reverse and start the cycle in another direction.
+The price overlap set for the reverse cycle grid provides a given profit for the initiating cycle.
 
-This allows you to increase the initial deposit using price fluctuations in any trend.
+For Reverse cycle there are only two possible result depending on the price in the market.
+In the first case the entire grid executed therefore we close the previous cycle with profit.
+In second case executing part of the grid orders, and the filling take profit order increase the depo in the second coin.
+It reduces the necessary price overlap and sooner or later first variant comes true.
+
+This allows you to increase the initial deposit using price fluctuations in any trend,
+and makes this strategy really break even. Unless you trade scam shitcoin.
 
 In the cycle to sell, the profit accumulates in the first currency.
 In the cycle to buy, the profit accumulates in the second coin.
+
+The optimal pair choice is a stablecoin or fiat plus a coin from the top ten.
 
 ## Functionality
 * Create grid and take profit orders
 * Logarithm price option for grid orders (customizable)
 * Reverse algo if all grid orders are filling
+* Calculation of the price overlap for the Reverse cycle for the profitable completion of the previous cycle
+* Use Average Directional Index indicator for best time starting Reverse cycle
 * Calculation of separate MAKER and TAKER fee
 * Shift grid orders (customizable) if the price is go way (before take profit placed) 
 * Fractional creation of grid for increase productivity (customizable)
-* Adaptive overlap price for grid on current market conditions (customizable)
-* Save funding change, cycle parameter and result in sqlite3 .db for external analytics (not Windows ver.)
+* Adaptive overlap price for grid on current market conditions (customizable) based on Bollinger Band
+* Adaptive profit setting on current market conditions (customizable) based on Bollinger Band
+* Save funding change, cycle parameter and result in sqlite3 .db for external analytics (not for Windows ver. now)
 * Telegram notification
 * External control from Telegram bot (now **stop** command realised)
 
@@ -116,8 +140,12 @@ Use LINEAR_GRID_K parameter and see 'Model of logarithmic grid.ods' for detail.
 
 #### Reverse
 It happens that all grid orders completed. Then we believe that we successfully bought the asset,
-turn over the algorithm and start trading the other way. The entire amount of currency purchased
-becomes a deposit for the next cycle.
+and place a take profit order. Instead of one order, we place a grid, which ensures the break-even strategy.
+The grid parameters change dynamically, depending on the market conditions, accumulated deposit
+during execution of the Reverse cycle, and the specified profitability parameters.
+
+With each successful completion of the reverse cycle, the accumulated profit volume increases,
+which reduces the necessary price overlap for the profitable completion of the original cycle.
 
 ### Place take profit
 As the grid orders executed, the volume of the take profit order sums up their volume,
@@ -125,6 +153,10 @@ price averaged and increased to override the fees and earn the specified profit.
 
 Do not set PROFIT too large. This reduces the probability of executing a take profit order
 with small price fluctuations. I settled on a value of about 0.5%
+
+For adaptive calculate profit before place order you can set PROFIT_MAX.
+Then its value will be set in the range from PROFIT to PROFIT_MAX. Calculation based on Bollinger Band
+indicator. 
 
 #### Restart
 When take profit order executed the cycle results recorded, the deposit increased by the cycle profit,
@@ -161,36 +193,47 @@ All data collected into funds_rate.db
 It Sqlite3 db with very simple structure, in table t_funds each row is the result of one
 cycle with parameters and result.
 
-You can connect to funds_rate.db from Excel, for example, via odbc and process them as you wish.
+Now I'm try use [prometheus](https://github.com/prometheus/client_python) -> [Grafana](https://grafana.com/)
+for calculate and visualisation analytic data. It's useful. You can use funds_rate_exporter.py for start. Find it into repository.
+
+Also, you can connect to the funds_rate.db from Excel, for example, via odbc and process them as you wish.
 
 Cycle time, yield, funds, correlation with cycle parameters,
 all this for all pairs and exchanges where this bot launched.
 
 ## Planned
-* Get stability in pump/dump situation (it's real)
+* Get stability in pump/dump situation through additional check signal from margin
 * Full auto recovery after any reason crash, restart etc.
-* Adaptive PROFIT param for current trade conditions
-* Check last ticker price and trend before place take profit order
-
 
 ## Tested
-On margin 4.2.2 Linux, VPS UBUNTU 20.04 4*vCPU 8Gb
-Exchange: Demo-OKEX, Bitfinex
+On margin 4.3.0 Linux, VPS UBUNTU 20.04 4*vCPU 8Gb
+On margin 4.3.0 Linux, VPS UBUNTU 20.04 2*vCPU 2Gb
+Exchange: Demo-OKEX, OKEX, Bitfinex
 
 + Volume and price correct for grid and take profit order
 + Reverse work
 + Shift grid
 + Auto overlap price for grid is correct
++ Auto profit calculate
 + Export into funds_rate.db
 + Telegram notification
 + control from Telegram message
 + partially filled order logic
++ Adaptive over price for Reverse cycle
++ Analise trends before start Reverse cycle
 
 ## NOT Tested
 
+- Not tested under Windows and macOS
+
 ## Known issue
-* on Bitfinex missed or incorrect reply status of placed or canceled orders (need margin function)
-* On Bitfinex margin freeze without error if more than one bot started. On Demo-OKEX no problem.
+
+In margin not work more than one Python bot at the same time
+
+Some function can not be use under Windows. I faced a problem use sqlite3 module
+in margin environment under Windows. You can try or resolve it.
+- Telegram control
+- Collection cycle data for external analytics
 
 ## Target
 * Extended testing capabilities
@@ -198,3 +241,8 @@ Exchange: Demo-OKEX, Bitfinex
 * Several users is more reaction from margin support
 * Resources for development
 * Quickly get fault tolerance profitable system
+
+## Referral code
+For 10% discount on [margin](https://margin.de) license and support this project you can use coupon code **Margin9ateuE**
+
+Also, you can start margin on [Hetzner](https://hetzner.cloud/?ref=uFdrF8nsdGMc) cloud VPS only for 4.19 € per month

@@ -1,7 +1,21 @@
-## v0.5b - 2021-06-08
+## v0.7rc - 2021-06-04
 ### Added for new features.
+* Send Telegram messages periodically that bot still alive
+* Added adaptive profit calculate based on Bollinger band
+* Added config for [prometheus_client](https://github.com/prometheus/client_python)
+* Added 'no loss' over price calculate for Reverse cycle grid
+* Added Average Directional Index analysis to optimize Reverse solution
+
+### Fixed
+* Difference k for top and bottom BB line
+
+### Update
+* Readme.md
+
+## v0.5b - 2021-06-08
+### Added for new features
 * Calculate price of grid orders by logarithmic scale
-* Add cycle result data for save into t_funds
+* Added cycle result data for save into t_funds
 
 ### Update
 * Readme.md
@@ -25,7 +39,7 @@
 
 ### Added for new features.
 * Commented service functions
-* Add setup info into docstring
+* Added setup info into docstring
 
 ## v0.7a - 2021-05-26
 ### Added for new features.
