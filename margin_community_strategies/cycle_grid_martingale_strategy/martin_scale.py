@@ -20,11 +20,10 @@ and 'save' strategy in margin should not return any error.
 Set correct ID_EXCHANGE
 Check and correct parameter at the top of script.
 
-Set ROUND_FLOAT_F and ROUND_FLOAT_S which correspond to the correct number of
-zeros after the point for the first and second coins on the exchange.
+Set ROUND_FLOAT which correspond to the correct number of
+zeros after the point for the first coins on the exchange.
 
-For REAL market set custom fee = 0% in margin terminal
-For DEMO market set custom fee same as FEE_* parameters below
+Set custom fee = 0% in margin terminal
 
 Verify init message in Strategy output window for no error
 ##################################################################
@@ -45,15 +44,12 @@ in margin environment under Windows. You can try or resolve it.
 
 * Telegram control
 - Check the owner and run permission for get_command_tlg.py
-- Try start it from terminal, if any error - fix it.
+- Try start it from cmd terminal, if any error - fix it.
 - If get_command_tlg.py start, check passed, stop it from any process manager.
 - When strategy started, you can send stop command from Telegram.
   In Telegram bot select message from desired strategy and Reply with text message 'stop'
   When strategy ends current cycle it not run next, but stay holding for manual action from
   margin interface. Only 'stop' command implemented now.
-
-* Cycle data collection for external analytics
-- no action needed
 """
 
 ##################################################################
@@ -86,10 +82,19 @@ EXCHANGE = ('Demo-OKEX',  # 0
 ##################################################################
 
 # Exchange setup
-ID_EXCHANGE = 0  # For collection of statistics
+'''
+# Bitfinex
+ID_EXCHANGE = 2  # For collection of statistics
 FEE_IN_PAIR = True  # Fee pays in pair
-FEE_MAKER = 0.10  # standard exchange Fee for maker
+FEE_MAKER = 0.1  # standard exchange Fee for maker
 FEE_TAKER = 0.17  # standard exchange Fee for taker
+# '''
+# OKEX
+ID_EXCHANGE = 3  # For collection of statistics
+FEE_IN_PAIR = True  # Fee pays in pair
+FEE_MAKER = 0.08  # standard exchange Fee for maker
+FEE_TAKER = 0.1  # standard exchange Fee for taker
+# '''
 # Trade parameter
 START_ON_BUY = True  # First cycle direction
 AMOUNT_FIRST = 0.0  # Deposit for Sell cycle in first currency
@@ -106,19 +111,13 @@ MARTIN = 5  # 5-20, % increments volume of orders in the grid
 SHIFT_GRID_THRESHOLD = 0.10  # % max price drift from 0 grid order before replace
 SHIFT_GRID_DELAY = 30  # sec delay for shift grid action
 # Other
-ROUND_FLOAT_F = 10000000  # Floor round 0.00000 = 0.00x for first currency
-ROUND_FLOAT_S = 10000  # Floor round 0.00000 = 0.00x for second currency
-# Rem.
-# BTC  10000000
-# LTC  100000
-# USDT 10000
-# ICP 10000
+ROUND_FLOAT = 1000000  # Floor round 0.00000 = 0.00x
 STATUS_DELAY = 60  # Minute between sending Tlg message about current status
 # Parameter for calculate grid over price in set_trade_condition()
 ADAPTIVE_TRADE_CONDITION = True
 KB = 2.0  # Bollinger k for Buy cycle -> low price
-KT = 2.0  # Bollinger k for Sell cycle -> high price
-MIN_DIFF = 0.01  # % min price difference for one step, min over price = MIN_DIFF * ORDER_Q
+KT = 2.5  # Bollinger k for Sell cycle -> high price
+MIN_DIFF = 0.05  # % min price difference for one step, min over price = MIN_DIFF * ORDER_Q
 # Parameter for calculate price of grid orders by logarithmic scale
 # If -1 function is disabled, can take a value from 0 to infinity (in practice no more 1000)
 # When 0 - logarithmic scale, increase parameter the result is approaching linear
@@ -355,8 +354,6 @@ class Strategy(StrategyBase):
                 self.set_trade_conditions(buy_side, depo, base_price)
             except Exception as ex:
                 self.message_log('Do not set over price: {}'.format(ex), log_level=LogLevel.ERROR)
-        if self.reverse:
-            self.calc_grid_avg(buy_side, depo, base_price, self.over_price)
         delta_price = (self.over_price * base_price) / (100 * (ORDER_Q - 1))
         funds = self.get_buffered_funds()
         if buy_side:
@@ -443,6 +440,7 @@ class Strategy(StrategyBase):
 
     def start(self) -> None:
         self.shift_grid_threshold = None
+        self.part_place_tp = False
         # Cancel take profit order in all state
         self.take_profit_order_hold.clear()
         self.tp_hold = False
@@ -542,7 +540,8 @@ class Strategy(StrategyBase):
                     self.profit_second = 0.0
                     self.cycle_time = datetime.utcnow()
                     if self.cycle_buy:
-                        amount = int(self.deposit_second * ROUND_FLOAT_S) / ROUND_FLOAT_S
+                        self.deposit_second = int(self.deposit_second * ROUND_FLOAT) / ROUND_FLOAT
+                        amount = self.deposit_second
                         self.message_log('Start{} Buy cycle with {} {} depo'
                                          .format(' Reverse' if self.reverse else '',
                                                  amount, self.s_currency), tlg=True)
@@ -552,7 +551,8 @@ class Strategy(StrategyBase):
                             if fund > self.deposit_first:
                                 self.deposit_first = fund
                                 self.message_log('Use all available fund for first currency')
-                        amount = int(self.deposit_first * ROUND_FLOAT_F) / ROUND_FLOAT_F
+                        self.deposit_first = int(self.deposit_first * ROUND_FLOAT) / ROUND_FLOAT
+                        amount = self.deposit_first
                         self.message_log('Start{} Sell cycle with {} {} depo'
                                          .format(' Reverse' if self.reverse else '',
                                                  amount, self.f_currency), tlg=True)
@@ -568,7 +568,7 @@ class Strategy(StrategyBase):
                     self.message_log('Shift grid')
                     self.start_after_shift = True
                     self.start()
-        elif self.part_place_tp:
+        elif self.part_place_tp and self.shift_grid_threshold:
             if ((self.cycle_buy and order_book.bids[0].price >= self.shift_grid_threshold) or
                     (not self.cycle_buy and order_book.asks[0].price <= self.shift_grid_threshold)):
                 self.shift_grid_threshold = None
@@ -695,8 +695,8 @@ class Strategy(StrategyBase):
             price += (FEE_MAKER + profit) * price / 100
             price = tcm.round_price(price, RoundingType.CEIL)
             amount = sum_amount_first
-        amount = int(amount * ROUND_FLOAT_F) / ROUND_FLOAT_F
-        # assert tcm.is_limit_order_valid(buy_side, amount, price)
+        amount = int(amount * ROUND_FLOAT) / ROUND_FLOAT
+        amount = tcm.round_amount(amount, RoundingType.FLOOR)
         return {'price': price, 'amount': amount, 'profit': profit}
 
     def calc_over_price(self, buy_side: bool, depo: float, base_price: float) -> float:
@@ -810,6 +810,7 @@ class Strategy(StrategyBase):
             pass
         else:
             self.shift_grid_threshold = None
+            self.part_place_tp = False
             result_trades = update.resulting_trades
             trade_amount_first = 0
             trade_amount_second = 0
@@ -903,10 +904,6 @@ class Strategy(StrategyBase):
                     if self.reverse_hold:
                         self.reverse_hold = False
                         self.cycle_time_reverse = None
-                    if self.cycle_buy:
-                        self.cycle_buy_count += 1
-                    else:
-                        self.cycle_sell_count += 1
                     # Calculate trade amount with Fee for take profit order for both currency
                     if FEE_IN_PAIR:
                         if self.cycle_buy:
@@ -923,6 +920,7 @@ class Strategy(StrategyBase):
                         if not self.reverse:
                             # Take account profit only for non reverse cycle
                             self.sum_profit_second += self.profit_second
+                        self.cycle_buy_count += 1
                     else:
                         self.profit_first = trade_amount_first - self.sum_amount_first
                         self.message_log('Cycle profit first {}'.format(self.profit_first))
@@ -930,6 +928,7 @@ class Strategy(StrategyBase):
                         if not self.reverse:
                             # Take account profit only for non reverse cycle
                             self.sum_profit_first += self.profit_first
+                        self.cycle_sell_count += 1
                     self.message_log('Restart', tlg=True)
                     self.restart = True
                     self.start()
@@ -938,6 +937,7 @@ class Strategy(StrategyBase):
                                      tlg=True)
             elif update.status == OrderUpdate.PARTIALLY_FILLED:
                 self.shift_grid_threshold = None
+                self.part_place_tp = False
                 order_trade = update.original_order
                 if self.tp_order_id == order_trade.id:
                     # This was take profit order

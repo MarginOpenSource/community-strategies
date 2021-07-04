@@ -1,4 +1,4 @@
-## v0.7rc - 2021-06-04
+## v0.7rc - 2021-06-05
 ### Added for new features.
 * Send Telegram messages periodically that bot still alive
 * Added adaptive profit calculate based on Bollinger band
