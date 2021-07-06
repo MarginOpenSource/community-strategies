@@ -859,11 +859,13 @@ class Strategy(StrategyBase):
                                 self.profit_first = self.sum_amount_first - self.deposit_first
                                 self.message_log('Reverse cycle profit first {}'.format(self.profit_first))
                                 self.sum_profit_first += self.profit_first
+                                self.deposit_first = self.sum_amount_first
                                 self.cycle_sell_count += 1
                             else:
                                 self.profit_second = self.sum_amount_second - self.deposit_second
                                 self.message_log('Reverse cycle profit second {}'.format(self.profit_second))
                                 self.sum_profit_second += self.profit_second
+                                self.deposit_second = self.sum_amount_second
                                 self.cycle_buy_count += 1
                             self.cycle_time_reverse = None
                             self.reverse_target_amount = None
@@ -888,10 +890,6 @@ class Strategy(StrategyBase):
                                 self.reverse_price = self.get_buffered_ticker().last_price
                                 self.reverse_hold = True
                                 self.place_profit_order()
-                        if self.cycle_buy:
-                            self.deposit_first = self.sum_amount_first
-                        else:
-                            self.deposit_second = self.sum_amount_second
                         if not self.reverse_hold:
                             # Reverse
                             self.cycle_buy = not self.cycle_buy
