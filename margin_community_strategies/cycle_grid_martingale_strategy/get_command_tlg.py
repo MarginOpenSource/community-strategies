@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Get message from Telegram bot and parse it into .db
+# Get message from Telegram bot and parse it into funds_rate.db
 # Copyright © 2021 Jerry Fedorenko aka VM
 
 import sqlite3
