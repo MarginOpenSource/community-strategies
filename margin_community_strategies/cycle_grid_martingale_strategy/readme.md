@@ -299,8 +299,8 @@ Exchange: Demo-OKEX, OKEX, Bitfinex, KRAKEN
 * Some function can not be use under Windows. I faced a problem use sqlite3 module
   in margin environment under Windows. You can try or resolve it.
 
-- Telegram control
-- Collection cycle data for external analytics
+ - Telegram control
+ - Collection cycle data for external analytics
 
 ## Target
 * Extended testing capabilities
