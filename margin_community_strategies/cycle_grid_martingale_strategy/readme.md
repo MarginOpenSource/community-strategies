@@ -76,12 +76,15 @@ The optimal pair choice is a stablecoin or fiat plus a coin from the top ten.
 * Fractional creation of grid for increase productivity (customizable)
 * Adaptive overlap price for grid on current market conditions (customizable) based on Bollinger Band
 * Adaptive profit setting on current market conditions (customizable) based on Bollinger Band
+* Adaptive grid orders quantity for initial and Reverse cycle
 * Save funding change, cycle parameter and result in sqlite3 .db for external analytics (not for Windows ver. now)
 * Telegram notification
 * External control from Telegram bot (now **stop** command realised)
+* Restore state after hard restart
 
 ## How it's work
-_Setup all mentioned parameter at the top of martin_scale.py_  
+_Setup all mentioned parameter at the top of martin_scale.py_
+
 ### Place grid
 The main parameters for the strategy are grid parameters. Specify the trade direction for the first cycle.
 If START_ON_BUY = True, a grid of buy orders will be placed and take profit will be for sale.
@@ -97,24 +100,41 @@ The first order, the price of which is closest to the current one is the smalles
 To avoid the execution of the first order "by market," its price set with a slight offset,
 which is determined by the parameter PRICE_SHIFT.
 
+#### Shift grid orders
+It happens that when place a grid, the price goes in the opposite direction. There is no point
+in waiting in this case, we need to move the grid after the price.
+For this there are SHIFT_GRID_DELAY. Configure them or leave the default values.
 
 #### Adaptive overlap price for grid
 The range of prices that overlaps the grid of orders affects profitability directly 
-and must correspond to market conditions. If it is too wide, the cycle time will be too long,
-and most of the deposit will not be involved in turnover. With a small overlap, the entire order
-grid will be executed in a short time, and the algorithm will be reversed,
+and must correspond to market conditions. If it is too wide combined with small number of orders,
+the cycle time will be too long, and most of the deposit will not be involved in turnover.
+With a small overlap, the entire order grid will be executed in a short time, and the algorithm will be reversed,
 while the profit on the cycle not fixed.
 
 The overlap range can be fixed. Then it is defined by OVER_PRICE = xx and ADAPTIVE_TRADE_CONDITION = False.
 
 For automatic market adjustment, ADAPTIVE_TRADE_CONDITION = True. In this case, the instant value
-of the Bollinger Band on 20 * 1 hour candles used to calculate the overlap range. The maximum and minimum
-values are limited by the parameters OVER_PRICE and MIN_DIFF * ORDER_Q, respectively.
+of the Bollinger Band on 20 * 1 hour candles used to calculate the overlap range. The minimum values
+are limited by the exchange limit for minimal price change per one step combined with number of orders.
 
 For fine-tuning separately for Buy and Sell cycles there are KB and KT parameters. By default, value
 2.0 is used to calculate Bollinger curves.
 
 The over price value updated before the start of the new cycle.
+
+#### Quantity of grid orders
+Two parameters determine the number of orders, ORDER_Q and OVER_PRICE. For start cycle and parameter
+ADAPTIVE_TRADE_CONDITION = False, these are absolute and fixed values.
+
+For Reverse cycle or parameter ADAPTIVE_TRADE_CONDITION = True they specify the density of grid orders.
+At the same time, the larger the range of overlap, the more orders there will be.
+When calculating, the exchange's restrictions on the minimum order size and price step taken into account
+and thus limit the maximum number of orders.
+
+For Reverse cycle, this is especially important, since with large price fluctuations we will have to sweep
+a very large range, 30-50% or more. In which case an adaptive number of orders will allow to do this as efficiently
+as possible.
 
 #### Fractional creation of grid
 For successful trading, the speed of the bot response to price fluctuations is important.
@@ -123,13 +143,13 @@ the first 5 are placed quickly, and the remaining ones with a significant delay.
 the longer it takes to shift the grid.
 
 Therefore, I added the parameter GRID_MAX_COUNT, which specifies the number of initial orders to be placed.
-Then, two options performed, one of the placed grid orders executed, and after successful creation
-of the take profit order, the missing grid orders added, or the grid shift function triggered.
-
-#### Shift grid orders
-It happens that when place a grid, the price goes in the opposite direction. There is no point
-in waiting in this case, we need to move the grid after the price.
-For this there are SHIFT_GRID_THRESHOLD and SHIFT_GRID_DELAY. Configure them or leave the default values.
+Then, two options performed. First, the grid shift function triggered. Second, one of the placed grid orders executed,
+and after successful creation of the take profit order, the next part *GRID_MAX_COUNT of hold grid orders added.
+If total count of active grid orders more than ORDER_Q and hold grid not exhaust each next placed one
+after filling one grid order, until the hold list exhausted.
+ 
+Thus, we always have a given number of active orders to respond to price fluctuations and have a large range
+of price overlap. Then, we do not risk running into the ban from exchange for exceeding the limit.
 
 #### Logarithm price option
 You can increase the share of the deposit in turnover when calculating the price for grid orders using not a linear,
@@ -156,7 +176,7 @@ with small price fluctuations. I settled on a value of about 0.5%
 
 For adaptive calculate profit before place order you can set PROFIT_MAX.
 Then its value will be set in the range from PROFIT to PROFIT_MAX. Calculation based on Bollinger Band
-indicator. 
+indicator with PROFIT_K coefficient. 
 
 #### Restart
 When take profit order executed the cycle results recorded, the deposit increased by the cycle profit,
@@ -166,7 +186,12 @@ and bot restarted.
 To correctly count fees for MAKER and TAKER, you must set the custom fee level = 0.0% in
 the margin settings and set the FEE_MAKER and FEE_TAKER parameters.
 
-For a third currency fee, such as BNB on Binance, set FEE_IN_PAIR = False
+For a third currency fee, such as BNB on Binance, set FEE_IN_PAIR = True
+For fee processing for second currency only, like as KRAKEN, use FEE_SECOND = True
+
+Priority of parameters from smaller to larger is:
+* FEE_SECOND
+* FEE_IN_PAIR
 
 ### Telegram notification
 Basic information about the state of the bot, for example, about the start and results of the cycle,
@@ -182,7 +207,7 @@ to complete the cycle and stop.
 
 + Check the owner and run permission for get_command_tlg.py
 + Try start it from terminal, if any error - fix it.
-+ If get_command_tlg.py start, check passed, stop it from any process manager.
++ If it started successfully, check passed, stop it from any process manager.
 + When strategy started, you can send stop command from Telegram.
   In Telegram bot select message from desired strategy and Reply with text message 'stop'
   When strategy ends current cycle it not run next, but stay holding for manual action from
@@ -190,25 +215,59 @@ to complete the cycle and stop.
 
 ### Save data for external analytics
 All data collected into funds_rate.db
-It Sqlite3 db with very simple structure, in table t_funds each row is the result of one
-cycle with parameters and result.
-
-Now I'm try use [prometheus](https://github.com/prometheus/client_python) -> [Grafana](https://grafana.com/)
-for calculate and visualisation analytic data. It's useful. You can use funds_rate_exporter.py for start. Find it into repository.
-
-Also, you can connect to the funds_rate.db from Excel, for example, via odbc and process them as you wish.
 
 Cycle time, yield, funds, correlation with cycle parameters,
 all this for all pairs and exchanges where this bot launched.
 
+It Sqlite3 db with very simple structure, in table t_funds each row is the result of one
+cycle with parameters and result.
+
+Now I'm try use [prometheus](https://github.com/prometheus/client_python) -> [Grafana](https://grafana.com/)
+for calculate and visualisation analytic data. It's useful. You can use funds_rate_exporter.py for start.
+Find it into repository. 
+
+Also, you can try the grafana_config.json as example of consolidated report.
+
+#### Consolidated asset valuation
+If you have several trading pairs on different exchanges, then regular valuation of the asset is a very time-consuming
+task.
+
+![img.png](img.png)
+
+At the end of each trading cycle, deposit data recorded for each currency. Once a day, the current currency rate to USD
+is queried. In funds_rate_exporter.py of times per minute calculated data for unloading in
+[prometheus](https://github.com/prometheus/client_python). An example of a summary report implemented on Grafana
+located above.
+
+To receive quotes, you need to get the free API key on [CoinMarketCap](https://coinmarketcap.com/api/pricing/).
+Specify the key at the top of the funds_rate_exporter.py and start it as service.
+
+### Recovery after any reason crash, restart etc.
+
+* Network failure, timeout etc.
+
+This is margin layer does, and it's work good. No additional action from user needed.
+
+* Hard restart.
+
+Margin periodically, every two seconds, save strategy state, and after restart place strategy in suspend state.
+  Strategy check if some order filled out during inactivity and recalculate state for normal operation. You need
+  manual unsuspend strategy for further work.
+
+This will work well if, at the time of interruption, the strategy was in a stable state and there were
+not pending actions to place/remove orders. Processing such situations requires research,
+and I am not sure that it is necessary.
+  
+* Maintenance
+
+If you need setup new version margin or Python strategy, first you need stop strategy.
+Use Telegram control function, described above.
+
 ## Planned
-* Get stability in pump/dump situation through additional check signal from margin
-* Full auto recovery after any reason crash, restart etc.
 
 ## Tested
-On margin 4.3.0 Linux, VPS UBUNTU 20.04 4*vCPU 8Gb
-On margin 4.3.0 Linux, VPS UBUNTU 20.04 2*vCPU 2Gb
-Exchange: Demo-OKEX, OKEX, Bitfinex
+On margin 4.3.1 Linux, VPS UBUNTU 20.04 2*vCPU 2Gb
+Exchange: Demo-OKEX, OKEX, Bitfinex, KRAKEN
 
 + Volume and price correct for grid and take profit order
 + Reverse work
@@ -219,8 +278,10 @@ Exchange: Demo-OKEX, OKEX, Bitfinex
 + Telegram notification
 + control from Telegram message
 + partially filled order logic
-+ Adaptive over price for Reverse cycle
++ Adapt over price
 + Analise trends before start Reverse cycle
++ Adapt grid orders quantity
++ partially placed grid orders
 
 ## NOT Tested
 
@@ -228,21 +289,26 @@ Exchange: Demo-OKEX, OKEX, Bitfinex
 
 ## Known issue
 
-In margin not work more than one Python bot at the same time
+* In margin not work more than one Python bot at the same time
 
-Some function can not be use under Windows. I faced a problem use sqlite3 module
-in margin environment under Windows. You can try or resolve it.
+* Sometimes skips the partial fill signal from the margin layer
+* Sometimes fill signal from the margin come with a delay
+* Memory leak 
+
+* Some function can not be use under Windows. I faced a problem use sqlite3 module
+  in margin environment under Windows. You can try or resolve it.
+
 - Telegram control
 - Collection cycle data for external analytics
 
 ## Target
 * Extended testing capabilities
 * Optimization ideas
-* Several users is more reaction from margin support
+* Several users raise reaction from margin support
 * Resources for development
-* Quickly get fault tolerance profitable system
+* Get fault tolerance profitable system
 
 ## Referral code
 For 10% discount on [margin](https://margin.de) license and support this project you can use coupon code **Margin9ateuE**
 
-Also, you can start margin on [Hetzner](https://hetzner.cloud/?ref=uFdrF8nsdGMc) cloud VPS only for 4.19 € per month
+Also, you can start margin on [Hetzner](https://hetzner.cloud/?ref=uFdrF8nsdGMc) cloud VPS only for 5.88 € per month
