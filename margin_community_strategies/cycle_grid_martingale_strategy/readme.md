@@ -1,6 +1,5 @@
 # Cyclic grid strategy based on martingale
 
-
 ## The motto of the project
 
 **_Profitable, fault-tolerant, adaptable to the market. Started and forgot._**
