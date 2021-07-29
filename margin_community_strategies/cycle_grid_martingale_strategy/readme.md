@@ -186,7 +186,7 @@ and bot restarted.
 To correctly count fees for MAKER and TAKER, you must set the custom fee level = 0.0% in
 the margin settings and set the FEE_MAKER and FEE_TAKER parameters.
 
-For a third currency fee, such as BNB on Binance, set FEE_IN_PAIR = True
+For a third currency fee, such as BNB on Binance, set FEE_IN_PAIR = False
 For fee processing for second currency only, like as KRAKEN, use FEE_SECOND = True
 
 Priority of parameters from smaller to larger is:
