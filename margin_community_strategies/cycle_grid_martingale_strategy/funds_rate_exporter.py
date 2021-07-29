@@ -35,7 +35,7 @@ VPS_NAME = 'hetzner_00'
 
 # CoinMarketCap
 URL = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest'
-API = '53d17bf5-a6ea-4f14-8693-b6b3495c4105'
+API = 'Place API there'
 
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 CURRENCY_RATE = {}
