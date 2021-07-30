@@ -1,0 +1,23 @@
+name: bump-version
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - '.bumpversion.cfg'
+      - 'setup.py'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Bump version and push tag
+        uses: jaumann/github-bumpversion-action@v0.0.7
+        env:
+          GITHUB_TOKEN: ${{ secrets.PUSH_TO_PROTECTED_BRANCH }}
+      - name: Push to protected branch
+        uses: THuppke/push-protected@master
+        with:
+          token: ${{ secrets.PUSH_TO_PROTECTED_BRANCH }}
+          unprotect_reviews: true
+          tags: true
