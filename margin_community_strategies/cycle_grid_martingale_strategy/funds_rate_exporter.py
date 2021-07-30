@@ -3,7 +3,7 @@
 ####################################################################
 # Config for prometheus_client
 # Copyright © 2021 Jerry Fedorenko aka VM
-# ver. 0.7rc
+# ver. 0.8rc
 # See readme.md for detail
 # Communication with the author and support on
 # https://discord.com/channels/600652551486177292/601329819371831296
@@ -12,6 +12,9 @@
 import time
 import sqlite3
 import psutil
+from requests import Request, Session
+from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
+import json
 
 from prometheus_client import start_http_server, Gauge
 from datetime import datetime
@@ -30,8 +33,13 @@ SLEEP_TIME_S = 60
 # Server name
 VPS_NAME = 'hetzner_00'
 
-# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# CoinMarketCap
+URL = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest'
+API = 'Place API there'
 
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+CURRENCY_RATE = {}
+CURRENCY_RATE_LAST_TIME = time.time()
 # TIME = datetime(2021, 6, 1, 0, 0, 0)
 TIME = datetime.now()
 
@@ -54,6 +62,9 @@ F_BALANCE = Gauge("margin_f_balance", "first balance amount", ['exchange', 'pair
 S_BALANCE = Gauge("margin_s_balance", "second balance amount", ['exchange', 'pair', 'vps_name'])
 TOTAL_BALANCE = Gauge("margin_balance", "total balance amount by last rate", ['exchange', 'pair', 'vps_name'])
 
+BALANCE_USD = Gauge("margin_balance_usd", "currency balance amount in USD", ['exchange', 'currency', 'vps_name'])
+
+
 # VPS control
 VPS_CPU = Gauge("margin_vps_cpu", "average cpu load", ['vps_name'])
 VPS_MEMORY = Gauge("margin_vps_memory", "average memory use in %", ['vps_name'])
@@ -71,7 +82,25 @@ KT = Gauge("margin_kt", "bollinger band k top", ['exchange', 'pair'])
 '''
 
 
-def read_sqlite_table(sql_conn):
+def get_rate(currency_rate):
+    currency = list(currency_rate.keys())
+    currency_str = ','.join(currency)
+    parameters = {'symbol': currency_str}
+    headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': API}
+    session = Session()
+    session.headers.update(headers)
+    data = {}
+    try:
+        response = session.get(URL, params=parameters)
+        data = json.loads(response.text)
+    except (ConnectionError, Timeout, TooManyRedirects) as e:
+        print(e)
+    for i in parameters.get('symbol').split(','):
+        price = data.get('data').get(i).get('quote').get('USD').get('price')
+        currency_rate[i] = price if price else 0.0
+
+
+def read_sqlite_table(sql_conn, currency_rate, currency_rate_last_time):
     cursor = sql_conn.cursor()
     # Aggregate score for pair on exchange
     cursor.execute('SELECT tex.name, tf.id_exchange,\
@@ -95,6 +124,13 @@ def read_sqlite_table(sql_conn):
         sum_s_profit = float(row[6])
         SUM_S_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_s_profit)
 
+        # Get currency rate for all currency from CoinMarketCap in relation to USD
+        currency_rate.setdefault(f_currency)
+        currency_rate.setdefault(s_currency)
+        time_diff = int(time.time() - currency_rate_last_time)
+        if None in currency_rate.values() or time_diff > 86400:
+            get_rate(currency_rate)
+            currency_rate_last_time = time.time()
         # Last rate
         cursor.execute('SELECT rate\
                         FROM t_funds\
@@ -175,13 +211,19 @@ def read_sqlite_table(sql_conn):
 
         for bri in balance_row:
             f_balance = bri[0]
+            f_balance_usd = f_balance * CURRENCY_RATE[f_currency]
+            # print(f_currency, f_balance_usd, ' USD')
             s_balance = bri[1]
+            s_balance_usd = s_balance * CURRENCY_RATE[s_currency]
+            # print(s_currency, s_balance_usd, ' USD')
             balance = f_balance * last_rate + s_balance
             F_BALANCE.labels(exchange, pair, VPS_NAME).set(f_balance)
             S_BALANCE.labels(exchange, pair, VPS_NAME).set(s_balance)
             TOTAL_BALANCE.labels(exchange, pair, VPS_NAME).set(balance)
-
+            BALANCE_USD.labels(exchange, f_currency, VPS_NAME).set(f_balance_usd)
+            BALANCE_USD.labels(exchange, s_currency, VPS_NAME).set(s_balance_usd)
     cursor.close()
+    return currency_rate_last_time
 
 
 if __name__ == '__main__':
@@ -193,7 +235,7 @@ if __name__ == '__main__':
     except sqlite3.Error as error:
         print("SQLite error", error)
     while True:
-        read_sqlite_table(sqlite_connection)
+        CURRENCY_RATE_LAST_TIME = read_sqlite_table(sqlite_connection, CURRENCY_RATE, CURRENCY_RATE_LAST_TIME)
         VPS_CPU.labels(VPS_NAME).set(psutil.getloadavg()[1])
         VPS_MEMORY.labels(VPS_NAME).set(psutil.virtual_memory()[2])
         TIME = datetime.now()

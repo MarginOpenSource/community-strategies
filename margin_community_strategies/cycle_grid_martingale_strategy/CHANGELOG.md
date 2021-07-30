@@ -1,4 +1,23 @@
-## v0.7rc - 2021-06-05
+## v0.8rc - 2021-07-29
+### Added for new features.
+* Auto calculate round float multiplier
+* Added fee processing for second currency only, like as KRAKEN
+* For analytic subsystem added consolidated asset valuation
+* Additional check for Error when place and cancel order
+* Recovery state logic implemented
+* For ADAPTIVE_TRADE_CONDITION adaptive calculate grid orders quantity
+
+### Fixed
+* Message 'Waiting ending cycle for manual action' instead of 'Stop...'
+
+### Changed for existing functionality.
+* Code refactoring
+* Place grid orders by part block for first ORDER_Q count and one by one for next
+
+### Update
+* Readme.md
+
+## v0.7rc - 2021-06-04
 ### Added for new features.
 * Send Telegram messages periodically that bot still alive
 * Added adaptive profit calculate based on Bollinger band
