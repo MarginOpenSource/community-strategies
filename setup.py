@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="margin_community_strategies",
-    version="0.0.1",
+    version="0.0.2",
     author="Margin UG",
     author_email="contact@margin.io",
     description="Strategies for the Margin Strategy Editor provided by the community",
