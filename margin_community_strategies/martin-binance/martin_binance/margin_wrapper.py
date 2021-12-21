@@ -7,19 +7,18 @@ margin.de <-> Python strategy <-> mPw <-> BinanceAPIServer <-> Python3 binance A
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc1"
+__version__ = "1.0rc2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import asyncio
-import functools
+from colorama import init as color_init
 import simplejson as json
 import logging
 import math
 import os
 import sys
 import time
-from signal import SIGINT
 from decimal import Decimal
 
 # noinspection PyPackageRequirements
@@ -27,7 +26,7 @@ import grpc
 import jsonpickle
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
-from margin_strategy_sdk import *
+from margin_strategy_sdk import *  # lgtm [py/polluting-import]
 
 # noinspection PyPackageRequirements
 import binance  # lgtm [py/import-and-import-from]
@@ -52,6 +51,7 @@ HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
 logger = logging.getLogger('logger')
+color_init()
 
 
 def write_log(level: LogLevel, message: str) -> None:
@@ -542,14 +542,19 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
         await asyncio.sleep(delay)
 
 
-async def ask_exit(sig_name, _stub, _client_id, _symbol):
-    # print(f"ask_exit._strategy: {_strategy}, _loop: {_loop}")
+async def ask_exit():
+    _stub = ms.Strategy.stub
+    _client_id = ms.Strategy.client_id
+    _symbol = ms.Strategy.symbol
     if ms.Strategy.strategy:
-        ms.Strategy.strategy.message_log(f"Got signal {sig_name}: exit", color=ms.Style.MAGENTA)
+        ms.Strategy.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
         await _stub.StopStream(binance_api_pb2.MarketRequest(client_id=_client_id, symbol=_symbol))
         tasks = asyncio.all_tasks(loop)
         for task in tasks:
-            task.cancel()
+            try:
+                task.cancel()
+            except asyncio.CancelledError:
+                pass
         try:
             ms.Strategy.strategy.stop()
         except Exception as _err:
@@ -564,7 +569,6 @@ async def ask_exit(sig_name, _stub, _client_id, _symbol):
                 print('Current state cleared')
             else:
                 print('OK')
-        loop.remove_signal_handler(SIGINT)
 
 
 async def buffered_candle(_stub, _client_id, _symbol):
@@ -850,12 +854,13 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
             color=ms.Style.GREEN)
         if order.remaining_amount == 0.0:
             # noinspection PyArgumentList
+            tcm = ms.Strategy.get_trading_capability_manager()  # lgtm [py/call/wrong-arguments]
             trade = {"qty": order.amount,
                      "isBuyer": order.buy,
                      "id": 1,
                      "orderId": order.id,
-                     "price": ms.Strategy.get_trading_capability_manager().round_price(
-                                  float(result.get('cummulativeQuoteQty')) / order.amount, RoundingType.ROUND),
+                     "price": tcm.round_price(float(result.get('cummulativeQuoteQty')) / order.amount,
+                                              RoundingType.ROUND),
                      "time": order.timestamp}
             # ms.Strategy.strategy.message_log(f"place_limit_order_callback.trade: {trade}", color=ms.Style.YELLOW)
             if len(ms.Strategy.trades) > TRADES_LIST_LIMIT:
@@ -978,7 +983,7 @@ async def main(_symbol):
     StrategyBase.symbol = _symbol
     # ms.Strategy.loop = loop
     account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
-    print(f"main.account_name: {account_name}")
+    print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
     channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
     stub = binance_api_pb2_grpc.MartinStub(channel)
     client_id_msg = await stub.OpenClientConnection(binance_api_pb2.OpenClientConnectionRequest(
@@ -1010,10 +1015,9 @@ async def main(_symbol):
         answer = input('Are you want cancel all active order for this pair? Y:')
         if answer.lower() == 'y':
             restore_state = False
-            _cancel_orders = await stub.CancelAllOrders(binance_api_pb2.MarketRequest(client_id=client_id_msg.client_id,
-                                                                                      symbol=_symbol))
+            await stub.CancelAllOrders(binance_api_pb2.MarketRequest(client_id=client_id_msg.client_id, symbol=_symbol))
             cancel_orders = json_format.MessageToDict(_active_orders).get('items', [])
-            print('Before start cancel orders:')
+            print('Before start was canceled orders:')
             for i in cancel_orders:
                 print(f"Order:{i['orderId']}, side:{i['side']}, amount:{i['origQty']}, price:{i['price']}")
             print('================================================================')
@@ -1089,8 +1093,6 @@ async def main(_symbol):
     loop.create_task(on_funds_update(stub, client_id_msg.client_id, _symbol, base_asset, quote_asset))
     loop.create_task(on_order_update(stub, client_id_msg.client_id, _symbol))
     # Start section
-    loop.add_signal_handler(SIGINT, functools.partial(asyncio.run_coroutine_threadsafe,
-                                                      ask_exit(SIGINT, stub, client_id_msg.client_id, _symbol), loop))
     loop.create_task(save_asset(stub, client_id_msg.client_id, base_asset, quote_asset))
     answer = str()
     if restore_state:

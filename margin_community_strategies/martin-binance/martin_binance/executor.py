@@ -6,35 +6,36 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc1"
+__version__ = "1.0rc2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
 
-import gc
-import sqlite3
-import statistics
-from datetime import datetime
-# noinspection PyUnresolvedReferences
-from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
-from multiprocessing import Process, Queue
-
-import requests
-
 try:
-    from margin_wrapper import *
+    from margin_wrapper import *  # lgtm [py/polluting-import]
     from margin_wrapper import __version__ as msb_ver
 except ImportError:
-    from margin_strategy_sdk import *
+    from margin_strategy_sdk import *  # lgtm [py/polluting-import]
     from typing import Dict, List
     import time
     import math
     import os
     import simplejson as json
+    import charset_normalizer
     msb_ver = ''
     STANDALONE = False
 else:
     STANDALONE = True
+#
+import gc
+import psutil
+import sqlite3
+import statistics
+from datetime import datetime
+from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
+from threading import Thread
+import queue
+import requests
 
 # region SetParameters
 SYMBOL = str()
@@ -125,38 +126,22 @@ class Style:
         return Style() + b
 
 
-def telegram_send(queue_to_tlg) -> None:
+def telegram(queue_to_tlg) -> None:
     url = TELEGRAM_URL
     token = TOKEN
     channel_id = CHANNEL_ID
     url += token
     method = url + '/sendMessage'
-    while True:
-        try:
-            text = queue_to_tlg.get()
-        except KeyboardInterrupt:
-            pass
-        else:
-            try:
-                requests.post(method, data={'chat_id': channel_id, 'text': text})
-            except Exception as _ex:
-                print(f"telegram_send: {_ex}")
 
-
-def telegram_control() -> None:
     def telegram_get(offset=None) -> []:
         command_list = []
-        url = TELEGRAM_URL
-        token = TOKEN
-        channel_id = CHANNEL_ID
-        url += token
-        method = url + '/getUpdates'
+        _method = url + '/getUpdates'
         res = None
         try:
-            res = requests.post(method, data={'chat_id': channel_id, 'offset': offset})
-        except Exception as _ex:
-            print(f"telegram_get: {_ex}")
-        if res.status_code == 200:
+            res = requests.post(_method, data={'chat_id': channel_id, 'offset': offset})
+        except Exception as _exp:
+            print(f"telegram_get: {_exp}")
+        if res and res.status_code == 200:
             result = res.json().get('result')
             # print(f"telegram_get.result: {result}")
             message_id = None
@@ -182,25 +167,41 @@ def telegram_control() -> None:
     cursor_control = connection_control.cursor()
     offset_id = None
     while True:
-        x = telegram_get(offset_id)
-        if x:
-            offset_id = x[-1].get('update_id')
-            offset_id += 1
-            for n in x:
-                a = n.get('reply_to_message')
-                if a:
-                    bot_id = a.split('.')[0]
-                    cursor_control.execute('insert into t_control values(?,?,?,?)',
-                                           (n['message_id'], n['text_in'], bot_id, None))
-            connection_control.commit()
         try:
-            time.sleep(10)
+            text = queue_to_tlg.get(block=True, timeout=10)
         except KeyboardInterrupt:
-            print("Keyboard Interrupt")
             break
+        except queue.Empty:
+            # Get external command from Telegram bot
+            x = telegram_get(offset_id)
+            if x:
+                offset_id = x[-1].get('update_id')
+                offset_id += 1
+                for n in x:
+                    a = n.get('reply_to_message')
+                    if a:
+                        bot_id = a.split('.')[0]
+                        cursor_control.execute('insert into t_control values(?,?,?,?)',
+                                               (n['message_id'], n['text_in'], bot_id, None))
+                        # Send receipt
+                        text = f"{n['text_in']}, OK"
+                        try:
+                            requests.post(method, data={'chat_id': channel_id, 'text': text})
+                        except Exception as _ex:
+                            print(f"telegram: {_ex}")
+                connection_control.commit()
+        else:
+            if text and 'stop_signal_QWE#@!' in text:
+                break
+            try:
+                requests.post(method, data={'chat_id': channel_id, 'text': text})
+            except Exception as _ex:
+                print(f"telegram: {_ex}")
+    print("tlg_stop")
 
 
-def save_to_db(queue_to_db, connection_analytic) -> None:
+def save_to_db(queue_to_db) -> None:
+    connection_analytic = sqlite3.connect(WORK_PATH + 'funds_rate.db', check_same_thread=False)
     cursor_analytic = connection_analytic.cursor()
     # Compliance check t_exchange and EXCHANGE() = exchange() from ms_cfg.toml
     cursor_analytic.execute("SELECT id_exchange, name FROM t_exchange")
@@ -219,7 +220,6 @@ def save_to_db(queue_to_db, connection_analytic) -> None:
         except KeyboardInterrupt:
             pass
         if data is None or data.get('stop_signal'):
-            connection_analytic.commit()
             break
         print("save_to_db: Record row into .db")
         cursor_analytic.execute("insert into t_funds values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -248,19 +248,11 @@ def save_to_db(queue_to_db, connection_analytic) -> None:
                                  data.get('cycle_time')))
         connection_analytic.commit()
     connection_analytic.commit()
+    print("db_stop")
 
 
 def float2decimal(_f: float) -> Decimal:
     return Decimal(str(_f))
-
-
-def memory_usage() -> int:
-    mem = str(os.popen('free -t -m').readlines())
-    t_ind = mem.index('T')
-    mem_g = ' '.join(mem[t_ind + 14:-4].split())
-    mem_total, mem_used, _unused_mem_free = map(int, mem_g.split())
-    mem_used_percent = int(100 * mem_used / mem_total)
-    return mem_used_percent
 
 
 class Orders:
@@ -410,9 +402,9 @@ class Strategy(StrategyBase):
         self.part_amount_second = Decimal('0')  # + Amount of partially filled order
         self.command = None  # + External input command from Telegram
         self.start_after_shift = False  # - Flag set before shift, clear into Start()
-        self.queue_to_db = Queue()  # - Queue for save data to .db
+        self.queue_to_db = queue.Queue()  # - Queue for save data to .db
         self.pr_db = None  # - Process for save data to .db
-        self.queue_to_tlg = Queue()  # - Queue for sending message to Telegram
+        self.queue_to_tlg = queue.Queue()  # - Queue for sending message to Telegram
         self.pr_tlg = None  # - Process for sending message to Telegram
         self.pr_tlg_control = None  # - Process for get command from Telegram
         self.restart = None  # - Set after execute take profit order and restart cycle
@@ -438,7 +430,7 @@ class Strategy(StrategyBase):
         self.grid_order_canceled = None  # -
 
     # noinspection PyProtectedMember
-    def init(self, check_funds: bool = True) -> None:
+    def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
         tcm = self.get_trading_capability_manager()
         self.f_currency = self.get_first_currency()
@@ -627,21 +619,21 @@ class Strategy(StrategyBase):
             #
             funds = self.get_buffered_funds()
             ff = funds.get(self.f_currency, 0)
-            ff = float2decimal(ff.available) if ff else Decimal('0.0')
+            ff = self.round_truncate(float2decimal(ff.available) if ff else Decimal('0.0'), base=True)
             fs = funds.get(self.s_currency, 0)
-            fs = float2decimal(fs.available) if fs else Decimal('0.0')
+            fs = self.round_truncate(float2decimal(fs.available) if fs else Decimal('0.0'), base=False)
             #
             if buy_side:
                 diff_s = self.deposit_second - fs
                 diff_f = diff_s / self.avg_rate
-                go_trade = bool(diff_f >= ff)
+                go_trade = bool(ff >= diff_f)
             else:
                 diff_f = self.deposit_first - ff
                 diff_s = diff_f * self.avg_rate
-                go_trade = bool(diff_s >= fs)
+                go_trade = bool(fs >= diff_s)
             #
-            self.message_log(f"go_trade:{go_trade}, ff:{ff}, fs:{fs}, avg_rate:{self.avg_rate}, diff_f:{diff_f},"
-                             f" diff_s:{diff_s}", log_level=LogLevel.DEBUG)
+            self.message_log(f"go_trade: {go_trade}, ff: {ff:f}, fs: {fs:f}, avg_rate: {self.avg_rate},"
+                             f" diff_f: {diff_f:f}, diff_s: {diff_s:f}", log_level=LogLevel.DEBUG)
             if go_trade:
                 self.message_log(f"Release grid hold: necessary {depo}, exist {fs if buy_side else ff}\n"
                                  f"Difference first: {diff_f}, second: {diff_s}")
@@ -650,7 +642,7 @@ class Strategy(StrategyBase):
                 self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
                                  f" Sum_amount_second: {self.sum_amount_second}",
                                  log_level=LogLevel.DEBUG, color=Style.MAGENTA)
-                depo -= diff_s if buy_side else diff_f
+                depo = fs if buy_side else ff
                 self.message_log(f"New depo is {depo}")
                 # Check min amount for placing TP
                 if self.check_min_amount_for_tp():
@@ -755,14 +747,14 @@ class Strategy(StrategyBase):
         # Variants are processed when the actual order is equal to or less than it should be
         # Exotic when drop during placed grid or unconfirmed TP left for later
         self.start_process()
-        open_orders = self.get_buffered_open_orders(True)
+        open_orders = self.get_buffered_open_orders(True)  # lgtm [py/call/wrong-arguments]
         tp_order = None
         # Separate TP order
         if self.tp_order_id:
             for i, o in enumerate(open_orders):
                 if o.id == self.tp_order_id:
                     tp_order = open_orders[i]
-                    del open_orders[i]
+                    del open_orders[i]  # skipcq: PYL-E1138
                     break
         # Possible strategy states in compare with saved one
         grid_orders_len = len(self.orders_grid)
@@ -1031,7 +1023,7 @@ class Strategy(StrategyBase):
                              f"First: {self.sum_profit_first}\n"
                              f"Second: {self.sum_profit_second}\n"
                              f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}")
-        mem = memory_usage()
+        mem = psutil.virtual_memory().percent
         if mem > 80:
             self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
             self.command = 'end'
@@ -1083,29 +1075,19 @@ class Strategy(StrategyBase):
 
     def stop(self) -> None:
         self.message_log('Stop')
-        data_to_db = {'stop_signal': True}
-        self.queue_to_db.put(data_to_db)
+        self.queue_to_db.put({'stop_signal': True})
+        self.queue_to_tlg.put('stop_signal_QWE#@!')
         self.connection_analytic.commit()
         self.connection_analytic.close()
-        self.queue_to_db.close()
-        self.queue_to_tlg.close()
         self.connection_analytic = None
-        self.pr_tlg = None
-        self.pr_db = None
-        self.pr_tlg_control = None
 
     def suspend(self) -> None:
         print('Suspend')
-        data_to_db = {'stop_signal': True}
-        self.queue_to_db.put(data_to_db)
+        self.queue_to_db.put({'stop_signal': True})
+        self.queue_to_tlg.put('stop_signal_QWE#@!')
         self.connection_analytic.commit()
         self.connection_analytic.close()
-        self.queue_to_db.close()
-        self.queue_to_tlg.close()
         self.connection_analytic = None
-        self.pr_tlg = None
-        self.pr_db = None
-        self.pr_tlg_control = None
 
     def unsuspend(self) -> None:
         print('Unsuspend')
@@ -1547,24 +1529,16 @@ class Strategy(StrategyBase):
         self.connection_analytic = self.connection_analytic or sqlite3.connect(WORK_PATH + 'funds_rate.db',
                                                                                check_same_thread=False)
         # Create processes for save to .db and send Telegram message
-        self.pr_db = self.pr_db or Process(target=save_to_db, args=(self.queue_to_db, self.connection_analytic,),
-                                           daemon=True)
-        self.pr_tlg = self.pr_tlg or Process(target=telegram_send, args=(self.queue_to_tlg,), daemon=True)
-        self.pr_tlg_control = self.pr_tlg_control or Process(target=telegram_control, daemon=True)
+        self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,))
+        self.pr_tlg = Thread(target=telegram, args=(self.queue_to_tlg,))
         if not self.pr_db.is_alive():
             print('Start process for .db save')
             try:
                 self.pr_db.start()
             except AssertionError as error:
                 self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
-        if not self.pr_tlg_control.is_alive():
-            print('Start process for Telegram control')
-            try:
-                self.pr_tlg_control.start()
-            except AssertionError as error:
-                self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
         if not self.pr_tlg.is_alive():
-            print('Start process for Telegram send')
+            print('Start process for Telegram')
             try:
                 self.pr_tlg.start()
             except AssertionError as error:
@@ -1653,7 +1627,7 @@ class Strategy(StrategyBase):
         After filling take profit order calculate profit, deposit and restart or place additional TP
         """
         # noinspection PyTupleAssignmentBalance
-        amount_first, amount_second, by_market = self.tp_was_filled
+        amount_first, amount_second, by_market = self.tp_was_filled  # skipcq: PYL-W0632
         self.message_log(f"after_filled_tp: amount_first: {amount_first}, amount_second: {amount_second},"
                          f" by_market: {by_market}, tp_amount: {self.tp_amount}, tp_target: {self.tp_target}"
                          f" one_else_grid: {one_else_grid}", log_level=LogLevel.DEBUG)
@@ -1719,7 +1693,7 @@ class Strategy(StrategyBase):
                 self.tp_hold_additional = True
                 self.place_grid(self.cycle_buy, amount, float(reverse_target_amount), allow_grid_shift=False)
                 return
-            if float(amount) > min_trade_amount:
+            if float(amount) > min_trade_amount:  # skipcq: PYL-R1705
                 self.message_log("Too small amount for place additional grid, correct grid and replace TP", tlg=True)
                 if self.orders_hold:
                     order = self.orders_hold.orders_list.pop()
@@ -2484,7 +2458,7 @@ class Strategy(StrategyBase):
 
     def on_place_order_error_string(self, place_order_id: int, error: str) -> None:
         # Check all orders on exchange if exists required
-        open_orders = self.get_buffered_open_orders(True)
+        open_orders = self.get_buffered_open_orders(True)  # lgtm [py/call/wrong-arguments]
         order = None
         if self.orders_init.exist(place_order_id):
             order = self.orders_init.find_order(open_orders, place_order_id)
@@ -2556,7 +2530,7 @@ class Strategy(StrategyBase):
 
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
         # Check all orders on exchange if not exists required
-        open_orders = self.get_buffered_open_orders(True)
+        open_orders = self.get_buffered_open_orders(True)  # lgtm [py/call/wrong-arguments]
         if any(i.id == order_id for i in open_orders):
             self.message_log(f"On cancel order {order_id} {error}, try one else", LogLevel.ERROR)
             self.cancel_order(order_id)
