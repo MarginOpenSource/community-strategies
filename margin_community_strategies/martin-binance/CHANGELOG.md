@@ -1,3 +1,30 @@
+## v1.1.0 - 2022-06-16
+### Added for new features
+* FTX exchange for STANDALONE mode added
+* updating grid if market conditions change
+
+### Update
+* Grafana template
+* code refactoring
+
+## v1.0rc7 - 2022-03-01
+### Added for new features
+* control and structure update for funds_rate.db for future updates
+* alerting for mismatch of number of orders to strategy status
+
+### Fixed
+* updated balance value for direct cycle for analytics
+
+### Update
+* refined calculation of order parameters for grid, taking into account rounding of price and volume value and
+correction of parameters of the last order
+* Binance API for /api/v3/exchangeInfo
+
+## v1.0rc6.1 - 2022-01-19
+### Update
+* refactoring funds_rate_exporter.py
+* readme.md, add 'For developer' chapter
+
 ## v1.0rc6 - 2022-01-11
 ### Fixed
 * handler for cancel order - part filled - correct cancel non-filled part 
