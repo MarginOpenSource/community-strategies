@@ -129,11 +129,23 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 ```console
 pip install martin-binance
 ```
+
+### Update
+
+Before update save configurations file:
+* ```martin_binance/ms_cfg.toml```
+* ```exchanges_wrapper/exch_srv.py```
+
+```console
+pip install martin-binance --upgrade
+```
+After update for restore config use saved files
+
 #### Create Telegram bot
 * Register [Telegram bot](https://t.me/BotFather)
 * Get token
 * Find channel_id. Just start [IDBot](https://t.me/username_to_id_bot) and get channel_id
-* Specify this data into ms_cfg.toml for 'Demo - Binance', 7
+* Specify this data into ```martin_binance/ms_cfg.toml``` for 'Demo - Binance', 7
 
 ### STANDALONE mode
 * Log in at [Binance Spot Test Network](https://testnet.binance.vision/)
@@ -143,13 +155,13 @@ pip install martin-binance
 * Specify api_key and api_secret in ```exchanges_wrapper/exch_srv_cfg.toml```
 * Run ```exchanges_wrapper/exch_srv.py``` in terminal window
 #### Start client
-* Run cli_7_BTCUSDT.py in other terminal window
+* Run ```martin_binance/cli_7_BTCUSDT.py``` in other terminal window
 
 Strategy is started.
 
 Setting trade pair. You must set pair name in three places the same (yes, it is crooked, but so far):
-* base setting at bottom of the cli_X_AAABBB.py in "__main__" section, SYMBOL = 'AAABBB'
-* the name of cli_X_AAABBB.py must match
+* base setting at bottom of the ```martin_binance/cli_X_AAABBB.py``` in "__main__" section, SYMBOL = 'AAABBB'
+* the name of ```cli_X_AAABBB.py``` must match
 * the name of pane in <a href="#tmux">Tmux terminal window</a>
 
 For stop strategy use Ctrl-C and/or Telegram control function
@@ -161,15 +173,15 @@ For stop strategy use Ctrl-C and/or Telegram control function
 Extract [Linux_site-packages.tar.gz](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/Linux_site-packages.tar.gz)
 
 to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
-* Copy ms_cfg.toml and funds_rate.db to the ``` ~/margin-linux ```
-* Copy executor.py to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
+* Copy ```martin_binance/ms_cfg.toml``` and ```martin_binance/funds_rate.db``` to the ``` ~/margin-linux ```
+* Copy ```martin_binance/executor.py``` to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
 
 #### For Windows
 Extract [win_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/win_site-packages.zip)
 
-to the ```C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
-* Copy ms_cfg.toml and funds_rate.db to the ```C:\Users\user\AppData\Local\Programs\margin```
-* Copy executor.py to the ```C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
+to the ```C:\Users\UserName\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
+* Copy ```martin_binance/ms_cfg.toml``` and ```martin_binance/funds_rate.db``` to the ```C:\Users\user\AppData\Local\Programs\margin```
+* Copy executor.py to the ```C:\Users\UserName\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
 
 #### For macOS
 Extract [MacOS_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/MacOS_site-packages.zip)
@@ -471,7 +483,8 @@ can be sent to Telegram bot.
 * stop - stop after end of cycle (if current cycle is reverse - only after back to direct cycle)
 * end - stop after end of cycle, direct and reverse, no difference
 
-All commands are sent as a reply to message from desired strategy. Use simple text message.
+All commands are sent as a reply to message from desired strategy. Use simple text message or menu items. For use menu 
+after first run strategy in Telegram bot use /start command once.
 If all is normal, you will receive a confirmation that the system has received the command within 10 seconds.
 
 ### Save data for external analytics

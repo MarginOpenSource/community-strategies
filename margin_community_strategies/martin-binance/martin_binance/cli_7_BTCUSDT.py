@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.1.2"
+__version__ = "1.2.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -49,8 +49,8 @@ ex.EXTRA_CHECK_ORDER_STATE = False  # Additional check for filled order(s), for 
 ex.START_ON_BUY = True  # First cycle direction
 ex.AMOUNT_FIRST = Decimal('0.3')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FIRST_FUND = False  # Use all available fund for first current
-ex.AMOUNT_SECOND = Decimal('10000.0')  # Deposit for Buy cycle in second currency
-ex.PRICE_SHIFT = 0.05  # 'No market' shift price in % from current bid/ask price
+ex.AMOUNT_SECOND = Decimal('300.0')  # Deposit for Buy cycle in second currency
+ex.PRICE_SHIFT = 0.01  # 'No market' shift price in % from current bid/ask price
 # Round pattern, set pattern 1.0123456789 or if not set used exchange settings
 ex.ROUND_BASE = str()
 ex.ROUND_QUOTE = str()
