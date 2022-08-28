@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.3"
+__version__ = "1.2.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -47,7 +47,7 @@ ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 ex.EXTRA_CHECK_ORDER_STATE = False  # Additional check for filled order(s), for (OKEX, )
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction
-ex.AMOUNT_FIRST = Decimal('0.3')  # Deposit for Sale cycle in first currency
+ex.AMOUNT_FIRST = Decimal('0.0')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FIRST_FUND = False  # Use all available fund for first current
 ex.AMOUNT_SECOND = Decimal('300.0')  # Deposit for Buy cycle in second currency
 ex.PRICE_SHIFT = 0.01  # 'No market' shift price in % from current bid/ask price
@@ -143,7 +143,7 @@ if __name__ == "__main__" and STANDALONE:
         pass
     finally:
         try:
-            loop.run_until_complete(ask_exit(loop))
+            loop.run_until_complete(ask_exit())
         except asyncio.CancelledError:
             pass
         except Exception as _err:

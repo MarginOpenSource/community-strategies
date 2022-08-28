@@ -7,17 +7,21 @@
 
 <h3 align="center">Free trading system for crypto exchanges (Binance, FTX, Bitfinex,)</h3>
 
+<h4 align="center">Other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a></h4>
+
 ***
-<a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version"></a>
-<a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability"><img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability"/></a>
+<h3 align="center">martin-binance <a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="20"></a> <--> exchanges-wrapper <a href="https://badge.fury.io/py/exchanges-wrapper"><img src="https://badge.fury.io/py/exchanges-wrapper.svg" alt="PyPI version" height="20"></a></h3>
+
+***
+<h1 align="center"><a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability"><img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability"/></a>
 <a href="https://deepsource.io/gh/DogsTailFarmer/martin-binance/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=resolved+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
 <a href="https://deepsource.io/gh/DogsTailFarmer/martin-binance/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=active+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
 <a href="https://lgtm.com/projects/g/DogsTailFarmer/martin-binance/alerts/"><img alt="Total alerts" src="https://img.shields.io/lgtm/alerts/g/DogsTailFarmer/martin-binance.svg?logo=lgtm&logoWidth=18"/></a>
 <a href="https://lgtm.com/projects/g/DogsTailFarmer/martin-binance/context:python"><img alt="Language grade: Python" src="https://img.shields.io/lgtm/grade/python/g/DogsTailFarmer/martin-binance.svg?logo=lgtm&logoWidth=18"/></a>
 <a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_martin-binance" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_martin-binance&metric=alert_status"/></a>
+</h1>
 
-Other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a>
-
+***
 ## The motto of the project
 
 **_Profitable, fault-tolerant, adaptable to the market. Started and forgot._**
@@ -46,6 +50,17 @@ Strategy logic realized at executor.py and trading parameters settings in the AP
 
 You can modify them for your needs. See <a href="#for-developers">For developers</a> section.
 
+## Important notices
+* You cannot run multiple pairs with overlapping currencies on the same account!
+
+Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
+
+Incorrectly: (BTC/USDT), (ETH/USDT), (BTC/ETH)
+
+As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
+
+* See <a href="#specific-ftx-requirements">Specific FTX requirements</a>
+
 ## Reference
 
 <a href="#trade-idea">Trade idea</a>
@@ -53,6 +68,8 @@ You can modify them for your needs. See <a href="#for-developers">For developers
 <a href="#features">Features</a>
 
 <a href="#quick-start">Quick start</a>
+
+<a href="#add-new-exchange-account">Add new exchange account</a>
 
 <a href="#tmux">Terminal Tmux for STANDALONE mode</a>
 
@@ -134,12 +151,14 @@ pip install martin-binance
 
 Before update save configurations file:
 * ```martin_binance/ms_cfg.toml```
-* ```exchanges_wrapper/exch_srv.py```
+* ```exchanges_wrapper/exch_srv_cfg.toml```
+
+Also save ```martin_binance/last_state``` folder after manually stop strategy.
 
 ```console
 pip install martin-binance --upgrade
 ```
-After update for restore config use saved files
+After update for restore config use saved files. Before restart replace ```martin_binance/last_state``` from saved.
 
 #### Create Telegram bot
 * Register [Telegram bot](https://t.me/BotFather)
@@ -154,12 +173,14 @@ After update for restore config use saved files
 #### Start server
 * Specify api_key and api_secret in ```exchanges_wrapper/exch_srv_cfg.toml```
 * Run ```exchanges_wrapper/exch_srv.py``` in terminal window
+
 #### Start client
 * Run ```martin_binance/cli_7_BTCUSDT.py``` in other terminal window
 
 Strategy is started.
 
-Setting trade pair. You must set pair name in three places the same (yes, it is crooked, but so far):
+#### Setting trade pair
+You must set pair name in three places the same (yes, it is crooked, but so far):
 * base setting at bottom of the ```martin_binance/cli_X_AAABBB.py``` in "__main__" section, SYMBOL = 'AAABBB'
 * the name of ```cli_X_AAABBB.py``` must match
 * the name of pane in <a href="#tmux">Tmux terminal window</a>
@@ -201,8 +222,18 @@ to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7
 
 Strategy is started.
 
-Setting trade pair. The selection of the pair is determined by the window of the terminal in which the strategy is
-launched. The "__ main __" section settings are ignored.
+#### Setting trade pair
+The selection of the pair is determined by the window of the terminal in which the strategy is launched.
+The "__ main __" section settings are ignored.
+
+### Add new exchange account
+<p id="add-new-exchange-account"></p>
+Adding an account is in two parts
+
+* For server, it is exchanges_wrapper/exch_srv_cfg.toml, where you place API key and *account name*
+* For client, it's martin_binance/ms_cfg.toml, where you add *account name* into exchange list
+
+The *account name* _must_ be identically for account.
 
 ## Terminal Tmux (Linux)
 <p id="tmux"></p>
@@ -556,11 +587,17 @@ Use Telegram control function, described above.
 <p id="specific-ftx-requirements"></p>
 
 These comments relate to this strategy, perhaps for another algorithm these restrictions will not be significant.
-This strategy can be use on FTX only in fee free mode. If this condition is not met, when calculating the take
+
+* This strategy can be use on FTX only in fee free mode. If this condition is not met, when calculating the take
 profit order price, a giant gap is obtained between the first grid order and the take profit order.
 This is due to the large price change step and the large minimum order size.
-
 To get a Maker fee = 0% you need a stake 25 FTT. [Details here](https://help.ftx.com/hc/en-us/articles/360052410392). 
+
+* Have a small stock of assets for both currencies, over and above used for deposit. 0.1% of the deposit
+volume is enough. Otherwise, the exchange rejects the last grid order and the TP order, provided that there
+is an accurately available balance sheet.
+```[2022-08-27 04:17:26,560: ERROR] handle_errors.response.status >= 400: {'success': False, 'error': 'Not enough balances'}```
+*FTX support rejected this issue.*
 
 
 ## For developers
