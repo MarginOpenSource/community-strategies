@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.4"
+__version__ = "1.2.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -17,10 +17,7 @@ Disclaimer
 All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 ##################################################################
-For standalone use set SYMBOL parameter at the bottom of this file
-With margin terminal all under "if __name__ == "__main__":" it's not use
-
-Set correct ID_EXCHANGE, see list of exchange in ms_cfg.toml
+For standalone use set SYMBOL parameter at the TOP of this file
 
 Check and set parameter at the TOP part of script
 
@@ -30,12 +27,14 @@ Verify init message in Strategy output window for no error
 import toml
 # noinspection PyUnresolvedReferences
 import sys
-import executor as ex
-from executor import *  # lgtm [py/polluting-import]
+import martin_binance.executor as ex
+from martin_binance.executor import *  # lgtm [py/polluting-import]
 ################################################################
 # Exchange setup and parameter settings
 ################################################################
-# Exchange setup
+# Set trading pair for STANDALONE mode, for margin mode takes from terminal
+ex.SYMBOL = 'BTCUSDT'
+# Exchange setup, see list of exchange in ms_cfg.toml
 ex.ID_EXCHANGE = 7  # See ms_cfg.toml Use for collection of statistics *and get client connection*
 ex.FEE_IN_PAIR = True  # Fee pays in pair
 ex.FEE_MAKER = Decimal('0.075')  # standard exchange Fee for maker
@@ -47,9 +46,9 @@ ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 ex.EXTRA_CHECK_ORDER_STATE = False  # Additional check for filled order(s), for (OKEX, )
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction
-ex.AMOUNT_FIRST = Decimal('0.0')  # Deposit for Sale cycle in first currency
+ex.AMOUNT_FIRST = Decimal('0.01')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FIRST_FUND = False  # Use all available fund for first current
-ex.AMOUNT_SECOND = Decimal('300.0')  # Deposit for Buy cycle in second currency
+ex.AMOUNT_SECOND = Decimal('1000.0')  # Deposit for Buy cycle in second currency
 ex.PRICE_SHIFT = 0.01  # 'No market' shift price in % from current bid/ask price
 # Round pattern, set pattern 1.0123456789 or if not set used exchange settings
 ex.ROUND_BASE = str()
@@ -88,25 +87,12 @@ ex.REVERSE_TARGET_AMOUNT = Decimal('0')
 ex.REVERSE_INIT_AMOUNT = Decimal('0')
 ex.REVERSE_STOP = False  # Stop after ending reverse cycle
 ################################################################
-# DO NOT EDIT UNDER THIS LINE EXCEPT SYMBOL SET LINE         ###
+#                 DO NOT EDIT UNDER THIS LINE                ###
 ################################################################
-
+config = None
+if ex.CONFIG_FILE.exists():
+    config = toml.load(str(ex.CONFIG_FILE))
 ex.HEAD_VERSION = __version__
-if not ex.STANDALONE and sys.platform == 'darwin':
-    user = (lambda: os.environ["USERNAME"] if "C:" in os.getcwd() else os.environ["USER"])()
-    FILE_CONFIG = f"/Users/{user}/.margin/ms_cfg.toml"
-    config = toml.load(FILE_CONFIG)
-    path = f"/Users/{user}/.margin/"
-    ex.LOG_PATH = path
-    ex.WORK_PATH = path
-    ex.LAST_STATE_PATH = path
-else:
-    FILE_CONFIG = './ms_cfg.toml'
-    config = toml.load(FILE_CONFIG)
-    path = config.get('Path')
-    ex.LOG_PATH = path.get('log_path')
-    ex.WORK_PATH = path.get('work_path')
-    ex.LAST_STATE_PATH = path.get('last_state_path')
 ex.EXCHANGE = config.get('exchange')
 ex.VPS_NAME = config.get('Exporter').get('vps_name')
 # Telegram parameters
@@ -116,28 +102,26 @@ for tlg in telegram:
     if ex.ID_EXCHANGE in tlg.get('id_exchange'):
         ex.TOKEN = tlg.get('token')
         ex.CHANNEL_ID = tlg.get('channel_id')
+        ex.INLINE_BOT = tlg.get('inline')
         break
 
 
 if __name__ == "__main__" and STANDALONE:
-    # Set active pair
-    SYMBOL = 'BTCUSDT'
-    #
     import logging.handlers
     # For autoload last state
     ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
     #
-    FILE_LOG = f"{ex.LOG_PATH}mPw_{ex.ID_EXCHANGE}_{SYMBOL}.log"
-    ex.FILE_LAST_STATE = f"{ex.LAST_STATE_PATH}{ex.ID_EXCHANGE}_{SYMBOL}.json"
+    log_file = Path(ex.LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
+    ex.LAST_STATE_FILE = Path(ex.LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
     #
     logger = logging.getLogger('logger')
     logger.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(FILE_LOG, maxBytes=1000000, backupCount=10)
+    handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
     handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
     logger.addHandler(handler)
     logger.propagate = False
     try:
-        loop.create_task(main(SYMBOL))
+        loop.create_task(main(ex.SYMBOL))
         loop.run_forever()
     except KeyboardInterrupt:
         pass
@@ -148,6 +132,5 @@ if __name__ == "__main__" and STANDALONE:
             pass
         except Exception as _err:
             print(f"Error: {_err}")
-        loop.stop()
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()

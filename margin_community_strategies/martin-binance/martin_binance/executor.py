@@ -6,29 +6,13 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6-7"
+__version__ = "1.2.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
-
-try:
-    from margin_wrapper import *  # lgtm [py/polluting-import]
-    from margin_wrapper import __version__ as msb_ver
-except ImportError:
-    from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
-    from typing import Dict, List
-    import time
-    import math
-    import simplejson as json
-    import charset_normalizer  # lgtm [py/unused-import] skipcq: PY-W2000
-    msb_ver = str()
-    STANDALONE = False
-else:
-    STANDALONE = True
-
+import platform
 import gc
 import psutil
-import sqlite3
 import statistics
 from datetime import datetime
 from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
@@ -36,7 +20,34 @@ from threading import Thread
 import queue
 import requests
 from requests.adapters import HTTPAdapter, Retry
-import traceback
+# noinspection PyUnresolvedReferences
+import traceback  # lgtm [py/unused-import]
+
+from martin_binance import Path, STANDALONE, DB_FILE
+# noinspection PyUnresolvedReferences
+from martin_binance import WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH  # lgtm [py/unused-import]
+
+if STANDALONE:
+    from martin_binance.margin_wrapper import *  # lgtm [py/polluting-import]
+    from martin_binance.margin_wrapper import __version__ as msb_ver
+else:
+    from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
+    from typing import Dict, List
+    import os
+    import sqlite3
+    import time
+    import math
+    import simplejson as json
+    msb_ver = str()
+    if platform.system() == 'Darwin':
+        user = (lambda: os.environ["USERNAME"] if "C:" in os.getcwd() else os.environ["USER"])()
+        WORK_PATH = Path("Users", user, ".margin")
+    else:
+        WORK_PATH = Path().resolve()
+    CONFIG_FILE = Path(WORK_PATH, "ms_cfg.toml")
+    DB_FILE = Path(WORK_PATH, "funds_rate.db")
+    LOG_PATH = None
+    LAST_STATE_PATH = None
 
 # region SetParameters
 SYMBOL = str()
@@ -95,17 +106,14 @@ REVERSE_STOP = bool()
 HEAD_VERSION = str()
 LOAD_LAST_STATE = int()
 # Path and files name
-DB_FILE = 'funds_rate.db'
-LOG_PATH = str()
-WORK_PATH = str()
-LAST_STATE_PATH = str()
-FILE_LAST_STATE = str()
+LAST_STATE_FILE: Path
 VPS_NAME = str()
 # Telegram
 TELEGRAM_URL = str()
 TOKEN = str()
 CHANNEL_ID = str()
 STOP_TLG = 'stop_signal_QWE#@!'
+INLINE_BOT = True
 # endregion
 
 
@@ -131,7 +139,6 @@ class Style:
 
 
 def telegram(queue_to_tlg, _bot_id) -> None:
-
     url = TELEGRAM_URL
     token = TOKEN
     channel_id = CHANNEL_ID
@@ -141,7 +148,21 @@ def telegram(queue_to_tlg, _bot_id) -> None:
     retries = Retry(total=5, backoff_factor=1, status_forcelist=[101, 111, 502, 503, 504])
     s.mount('https://', HTTPAdapter(max_retries=retries))
 
-    def requests_post(_method, _data, session):
+    def get_keyboard_markup():
+        return json.dumps({
+            "inline_keyboard": [
+                [
+                    {'text': 'status', 'callback_data': 'status_callback'},
+                    {'text': 'stop', 'callback_data': 'stop_callback'},
+                    {'text': 'end', 'callback_data': 'end_callback'}
+                ]
+            ]})
+
+    def requests_post(_method, _data, session, inline_buttons=False):
+        if INLINE_BOT and inline_buttons:
+            keyboard = get_keyboard_markup()
+            _data['reply_markup'] = keyboard
+
         _res = None
         try:
             _res = session.post(_method, data=_data)
@@ -151,37 +172,105 @@ def telegram(queue_to_tlg, _bot_id) -> None:
             print(f"Telegram: {_exc}")
         return _res
 
+    def parse_query(update_inner):
+        update_id = update_inner.get('update_id')
+        query = update_inner.get('callback_query')
+        from_id = query.get('from').get('id')
+
+        if from_id != int(channel_id):
+            return None
+
+        message = query.get('message')
+        message_id = message.get('message_id')
+        query_data = query.get('data')
+        reply_to_message = message.get('text')
+
+        command = None
+        if query_data == 'status_callback':
+            command = 'status'
+        elif query_data == 'stop_callback':
+            command = 'stop'
+        elif query_data == 'end_callback':
+            command = 'end'
+
+        requests_post(url + '/answerCallbackQuery', {'callback_query_id': query.get('id')}, s)
+
+        return {
+            'update_id': update_id,
+            'message_id': message_id,
+            'text_in': command,
+            'reply_to_message': reply_to_message
+        }
+
+    def parse_command(update_inner):
+        update_id = update_inner.get('update_id')
+        message = update_inner.get('message')
+        from_id = message.get('from').get('id')
+        if from_id != int(channel_id):
+            return None
+
+        message_id = message.get('message_id')
+        text_in = update_inner.get('message').get('text')
+
+        try:
+            reply_to_message = message.get('reply_to_message').get('text')
+        except AttributeError:
+            reply_to_message = None
+            _text = "The command must be a response to any message from a specific strategy," \
+                    " use Reply + Menu combination"
+            requests_post(method, _data={'chat_id': channel_id, 'text': _text}, session=s)
+
+        return {
+            'update_id': update_id,
+            'message_id': message_id,
+            'text_in': text_in,
+            'reply_to_message': reply_to_message
+        }
+
     def telegram_get(offset=None) -> []:
         command_list = []
         _method = url + '/getUpdates'
         _res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset}, session=s)
-        if _res and _res.status_code == 200:
-            __result = _res.json().get('result')
-            # print(f"telegram_get.result: offset: {offset}, {__result}")
-            message_id = None
-            text_in = None
-            reply_to_message = None
-            for i in __result:
-                update_id = i.get('update_id')
-                message = i.get('message')
-                if message:
-                    from_id = message.get('from').get('id')
-                    if from_id == int(channel_id):
-                        message_id = message.get('message_id')
-                        text_in = i.get('message').get('text')
-                        try:
-                            reply_to_message = i.get('message').get('reply_to_message').get('text')
-                        except AttributeError:
-                            reply_to_message = None
-                            _text = "The command must be a response to any message from a specific strategy," \
-                                    " use Reply + Menu combination"
-                            requests_post(method, _data={'chat_id': channel_id, 'text': _text}, session=s)
-                command_list.append({'update_id': update_id, 'message_id': message_id,
-                                     'text_in': text_in, 'reply_to_message': reply_to_message})
+
+        if not _res or _res.status_code != 200:
+            return command_list
+
+        __result = _res.json().get('result')
+        for result_in in __result:
+            parsed = None
+            if result_in.get('message') is not None:
+                parsed = parse_command(result_in)
+            if result_in.get('callback_query') is not None:
+                parsed = parse_query(result_in)
+            if parsed:
+                command_list.append(parsed)
+
         return command_list
 
+    def process_update(update_inner):
+        reply = update_inner.get('reply_to_message')
+
+        if not reply:
+            return
+
+        in_bot_id = reply.split('.')[0]
+        if in_bot_id != _bot_id:
+            return
+
+        try:
+            msg_in = str(update_inner['text_in']).lower().strip().replace('/', '')
+            connection_control.execute('insert into t_control values(?,?,?,?)',
+                                       (update_inner['message_id'], msg_in, in_bot_id, None))
+            connection_control.commit()
+        except sqlite3.Error as ex:
+            print(f"telegram: insert into t_control: {ex}")
+        else:
+            # Send receipt
+            post_text = f"Received '{msg_in}' command, OK"
+            requests_post(method, _data={'chat_id': channel_id, 'text': post_text}, session=s)
+
     # Set command for Telegram bot
-    _command = requests_post(url + '/getMyCommands', _data=None,  session=s)
+    _command = requests_post(url + '/getMyCommands', _data=None, session=s)
     if _command and _command.status_code == 200 and not _command.json().get('result', None):
         _commands = {
             "commands": json.dumps([
@@ -197,7 +286,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
         print(f"Set command menu for Telegram bot: code: {res.status_code}, result: {res.json()}, "
               f"restart Telegram bot by /start command for update it")
     #
-    connection_control = sqlite3.connect(WORK_PATH + DB_FILE)
+    connection_control = sqlite3.connect(DB_FILE)
     offset_id = None
     while True:
         try:
@@ -206,35 +295,21 @@ def telegram(queue_to_tlg, _bot_id) -> None:
             break
         except queue.Empty:
             # Get external command from Telegram bot
-            x = telegram_get(offset_id)
-            if x:
-                offset_id = x[-1].get('update_id')
-                offset_id += 1
-                for n in x:
-                    a = n.get('reply_to_message')
-                    if a:
-                        bot_id = a.split('.')[0]
-                        if bot_id == _bot_id:
-                            try:
-                                msg_in = str(n['text_in']).lower().strip().replace('/', '')
-                                connection_control.execute('insert into t_control values(?,?,?,?)',
-                                                           (n['message_id'], msg_in, bot_id, None))
-                                connection_control.commit()
-                            except sqlite3.Error as ex:
-                                print(f"telegram: insert into t_control: {ex}")
-                            else:
-                                # Send receipt
-                                text = f"Received '{msg_in}' command, OK"
-                                requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s)
+            updates = telegram_get(offset_id)
+            if not updates:
+                continue
+            offset_id = updates[-1].get('update_id') + 1
+            for update in updates:
+                process_update(update)
         else:
             if text and STOP_TLG in text:
                 connection_control.close()
                 break
-            requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s)
+            requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s, inline_buttons=True)
 
 
 def db_management() -> None:
-    conn = sqlite3.connect(WORK_PATH + DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     conn.execute("CREATE TABLE IF NOT EXISTS t_orders (\
                   id_exchange   INTEGER REFERENCES t_exchange (id_exchange)\
                                     ON DELETE RESTRICT ON UPDATE CASCADE NOT NULL,\
@@ -280,7 +355,7 @@ def db_management() -> None:
 
 
 def save_to_db(queue_to_db) -> None:
-    connection_analytic = sqlite3.connect(WORK_PATH + DB_FILE, check_same_thread=False, timeout=10)
+    connection_analytic = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
     # Save data to .db
     data = None
     result = True
@@ -537,7 +612,7 @@ class Orders:
 
 class Strategy(StrategyBase):
     ##############################################################
-    # strategy logic methods
+    # strategy control methods
     ##############################################################
     def __init__(self):
         super().__init__()
@@ -632,7 +707,7 @@ class Strategy(StrategyBase):
         self.last_ticker_update = 0  # -
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
-        # self.message_log('Start Init section')
+        self.message_log('Start Init section')
         if Decimal('0.0') > PROFIT_REVERSE > Decimal('0.75'):
             init_params_error = 'PROFIT_REVERSE'
         elif FEE_SECOND and FEE_FTX:
@@ -676,76 +751,34 @@ class Strategy(StrategyBase):
         if last_price:
             print('Last ticker price: ', last_price)
             self.avg_rate = f2d(last_price)
-            df = self.get_buffered_funds().get(self.f_currency, 0)
-            df = df.available if df else 0
-            if USE_ALL_FIRST_FUND and df and self.cycle_buy:
-                self.message_log('Check USE_ALL_FIRST_FUND parameter. You may have loss on Reverse cycle',
-                                 color=Style.B_WHITE)
-            if self.cycle_buy:
-                ds = self.get_buffered_funds().get(self.s_currency, 0)
-                ds = ds.available if ds else 0
-                if check_funds and self.deposit_second > f2d(ds):
-                    self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
-                    if STANDALONE:
-                        raise SystemExit(1)
-                first_order_vlm = self.deposit_second * 1 * (1 - self.martin) / (1 - self.martin**ORDER_Q)
-                first_order_vlm /= self.avg_rate
-                amount_min = tcm.get_min_buy_amount(last_price)
-            else:
-                if USE_ALL_FIRST_FUND:
-                    self.deposit_first = f2d(df)
-                else:
-                    if check_funds and self.deposit_first > f2d(df):
-                        self.message_log('Not enough first coin for Sell cycle!', color=Style.B_RED)
+            if self.first_run and check_funds:
+                df = self.get_buffered_funds().get(self.f_currency, 0)
+                df = df.available if df else 0
+                if USE_ALL_FIRST_FUND and df and self.cycle_buy:
+                    self.message_log('Check USE_ALL_FIRST_FUND parameter. You may have loss on Reverse cycle',
+                                     color=Style.B_WHITE)
+                if self.cycle_buy:
+                    ds = self.get_buffered_funds().get(self.s_currency, 0)
+                    ds = ds.available if ds else 0
+                    if self.deposit_second > f2d(ds):
+                        self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
                         if STANDALONE:
                             raise SystemExit(1)
-                first_order_vlm = self.deposit_first * 1 * (1 - self.martin) / (1 - pow(self.martin, ORDER_Q))
-                amount_min = tcm.get_min_sell_amount(last_price)
-            if not GRID_ONLY and PROFIT_MAX < 100:
-                # Calculate the recommended size of the first grid order depending on the step_size
-                step_size = tcm.get_minimal_amount_change(amount_min)
-                k_m = 1 - float(PROFIT_MAX) / 100
-                amount_first_grid = (step_size * last_price / ((1 / k_m) - 1))
-                # For Bitfinex test accounts correction
-                if (amount_first_grid >= float(self.deposit_second) if self.cycle_buy else float(self.deposit_first) or
-                        amount_first_grid >= tcm.get_max_sell_amount(0)):
-                    amount_first_grid /= ORDER_Q
-                #
-                if self.cycle_buy:
-                    if amount_first_grid > 80 * self.deposit_second / 100:
-                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
-                                         f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
-                        if STANDALONE and self.first_run:
-                            raise SystemExit(1)
-                    elif amount_first_grid > 20 * self.deposit_second / 100:
-                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} it is rather"
-                                         f" big for a small deposit {self.deposit_second}", log_level=LogLevel.WARNING)
+                    depo = self.deposit_second
                 else:
-                    amount_first_grid /= last_price
-                    if amount_first_grid > 80 * self.deposit_first / 100:
-                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
-                                         f" a small deposit {self.deposit_first}", log_level=LogLevel.ERROR)
-                        if STANDALONE and self.first_run:
-                            raise SystemExit(1)
-                    elif amount_first_grid > 20 * self.deposit_first / 100:
-                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} it is rather"
-                                         f" big for a small deposit {self.deposit_first}", log_level=LogLevel.WARNING)
-            #
-            if self.cycle_buy and first_order_vlm < tcm.get_min_buy_amount(last_price):
-                self.message_log(f"Total deposit {AMOUNT_SECOND}{self.s_currency}"
-                                 f" not enough for min amount for {ORDER_Q} orders.", color=Style.B_RED)
-                if STANDALONE and self.first_run:
-                    raise SystemExit(1)
-            elif not self.cycle_buy and first_order_vlm < tcm.get_min_sell_amount(last_price):
-                self.message_log(f"Total deposit {self.deposit_first}{self.f_currency}"
-                                 f" not enough for min amount for {ORDER_Q} orders.", color=Style.B_RED)
-                if STANDALONE and self.first_run:
-                    raise SystemExit(1)
-            buy_amount = tcm.get_min_buy_amount(last_price)
-            sell_amount = tcm.get_min_sell_amount(last_price)
-            print(f"buy_amount: {buy_amount}, sell_amount: {sell_amount}")
+                    if USE_ALL_FIRST_FUND:
+                        self.deposit_first = f2d(df)
+                    else:
+                        if self.deposit_first > f2d(df):
+                            self.message_log('Not enough first coin for Sell cycle!', color=Style.B_RED)
+                            if STANDALONE:
+                                raise SystemExit(1)
+                    depo = self.deposit_first
+                self.place_grid(self.cycle_buy, depo, self.reverse_target_amount, init_calc_only=True)
         else:
-            print('Actual price not received, initialization checks skipped')
+            print("Can't get actual price, initialization checks stopped")
+            if STANDALONE:
+                raise SystemExit(1)
         # self.message_log('End Init section')
 
     @staticmethod
@@ -1401,6 +1434,39 @@ class Strategy(StrategyBase):
         print('Unsuspend')
         self.start_process()
 
+    def init_warning(self, _amount_first_grid: Decimal):
+        if self.cycle_buy:
+            depo = self.deposit_second
+        else:
+            depo = self.deposit_first
+        if ADAPTIVE_TRADE_CONDITION:
+            if self.first_run and self.order_q < 3:
+                self.message_log(f"Depo amount {depo} not enough to set the grid with 3 or more orders",
+                                 log_level=LogLevel.ERROR)
+                if STANDALONE:
+                    raise SystemExit(1)
+
+            _amount_first_grid = _amount_first_grid if self.cycle_buy else (_amount_first_grid / self.avg_rate)
+
+            if _amount_first_grid > 80 * depo / 100:
+                self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} too large for"
+                                 f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
+                if STANDALONE and self.first_run:
+                    raise SystemExit(1)
+            elif _amount_first_grid > 20 * depo / 100:
+                self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} it is rather"
+                                 f" big for a small deposit {self.deposit_second}", log_level=LogLevel.WARNING)
+        else:
+            first_order_vlm = depo * 1 * (1 - self.martin) / (1 - self.martin ** ORDER_Q)
+
+            first_order_vlm = (first_order_vlm / self.avg_rate) if self.cycle_buy else first_order_vlm
+
+            if first_order_vlm < _amount_first_grid:
+                self.message_log(f"Depo amount {depo}{self.s_currency} not enough for {ORDER_Q} orders",
+                                 color=Style.B_RED)
+                if STANDALONE and self.first_run:
+                    raise SystemExit(1)
+
     ##############################################################
     # strategy function
     ##############################################################
@@ -1411,12 +1477,14 @@ class Strategy(StrategyBase):
                    reverse_target_amount: Decimal,
                    allow_grid_shift: bool = True,
                    additional_grid: bool = False,
-                   grid_update: bool = False) -> None:
-        self.message_log(f"place_grid: buy_side: {buy_side}, depo: {depo},"
-                         f" reverse_target_amount: {reverse_target_amount},"
-                         f" allow_grid_shift: {allow_grid_shift},"
-                         f" additional_grid: {additional_grid},"
-                         f" grid_update: {grid_update}", log_level=LogLevel.DEBUG)
+                   grid_update: bool = False,
+                   init_calc_only: bool = False) -> None:
+        if not init_calc_only:
+            self.message_log(f"place_grid: buy_side: {buy_side}, depo: {depo},"
+                             f" reverse_target_amount: {reverse_target_amount},"
+                             f" allow_grid_shift: {allow_grid_shift},"
+                             f" additional_grid: {additional_grid},"
+                             f" grid_update: {grid_update}", log_level=LogLevel.DEBUG)
         self.grid_hold.clear()
         self.last_shift_time = None
         funds = self.get_buffered_funds()
@@ -1453,8 +1521,8 @@ class Strategy(StrategyBase):
                                                                   additional_grid=additional_grid,
                                                                   grid_update=grid_update)
                 except Exception as ex:
-                    self.message_log(f"Can't set trade conditions: {ex}\n"
-                                     f"{traceback.print_exc()}", log_level=LogLevel.ERROR)
+                    self.message_log(f"Can't set trade conditions: {ex}", log_level=LogLevel.ERROR)
+                    self.message_log(f"Can't set trade conditions: {traceback.print_exc()}", log_level=LogLevel.DEBUG)
                     return
             else:
                 self.over_price = OVER_PRICE
@@ -1462,11 +1530,17 @@ class Strategy(StrategyBase):
                 amount_first_grid = amount_min_dec
             if self.order_q > 1:
                 self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
-                                 f" cycle set {self.order_q} orders for {self.over_price:.4f}% over price", tlg=False)
+                                 f" cycle{' will be' if init_calc_only else ''} set {self.order_q} orders"
+                                 f" for {self.over_price:.4f}% over price", tlg=False)
             else:
                 self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
                                  f" cycle set 1 order{' for additional grid' if additional_grid else ''}",
                                  tlg=False)
+            #
+            if init_calc_only:
+                self.init_warning(amount_first_grid)
+                return
+            #
             if self.order_q > 1:
                 delta_price = self.over_price * base_price_dec / (100 * (self.order_q - 1))
             else:
@@ -1800,16 +1874,6 @@ class Strategy(StrategyBase):
         self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {float(depo):f}, base_price: {base_price},"
                          f" reverse_target_amount: {reverse_target_amount}, amount_min: {amount_min},"
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
-        if additional_grid or grid_update:
-            grid_min = 1
-        else:
-            if FEE_FTX and not self.reverse:
-                grid_min = GRID_MAX_COUNT
-            else:
-                grid_min = ORDER_Q
-        over_price_min = 100 * delta_min * (grid_min + 1) / base_price
-        self.message_log(f"set_trade_conditions.grid_min: {grid_min}, over_price_min: {float(over_price_min):f}",
-                         LogLevel.DEBUG)
         depo_c = (depo / base_price) if buy_side else depo
         if not additional_grid and not grid_update and not GRID_ONLY and PROFIT_MAX < 100:
             k_m = 1 - PROFIT_MAX / 100
@@ -1836,7 +1900,7 @@ class Strategy(StrategyBase):
             else:
                 tbb = bb.get('tbb')
                 over_price = 100 * (f2d(tbb) - base_price) / base_price
-        self.over_price = max(over_price, over_price_min)
+        self.over_price = max(over_price, OVER_PRICE)
         # Adapt grid orders quantity for current over price
         order_q = int(self.over_price * ORDER_Q / OVER_PRICE)
         depo_c = (depo / base_price) if buy_side else depo
@@ -1845,8 +1909,7 @@ class Strategy(StrategyBase):
         self.message_log(f"set_trade_conditions: depo: {float(depo):f}, order_q: {order_q},"
                          f" amount_first_grid: {amount_first_grid:f}, amount_2: {amnt_2:f},"
                          f" q_max: {q_max}, coarse overprice: {float(self.over_price):f}", LogLevel.DEBUG)
-        q_max = max(q_max, grid_min)
-        while q_max > grid_min:
+        while q_max > 3:
             delta_price = self.over_price * base_price / (100 * (q_max - 1))
             if LINEAR_GRID_K >= 0:
                 price_k = f2d(1 - math.log(q_max - 1, q_max + LINEAR_GRID_K))
@@ -1857,13 +1920,7 @@ class Strategy(StrategyBase):
                 break
             q_max -= 1
         #
-        if order_q > q_max:
-            self.order_q = q_max
-        else:
-            if order_q >= grid_min:
-                self.order_q = order_q
-            else:
-                self.order_q = grid_min
+        self.order_q = q_max if order_q > q_max else order_q
         # Correction over_price after change quantity of orders
         if self.reverse and self.order_q > 1:
             over_price = self.calc_over_price(buy_side,
@@ -1873,7 +1930,7 @@ class Strategy(StrategyBase):
                                               delta_min,
                                               amount_first_grid,
                                               amount_min)
-            self.over_price = max(over_price, over_price_min)
+            self.over_price = max(over_price, OVER_PRICE)
         return amount_first_grid
 
     def set_profit(self) -> Decimal:
@@ -1990,10 +2047,11 @@ class Strategy(StrategyBase):
                       'min_delta': min_delta,
                       'amount_min': amount_min}
             over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
-        elif self.order_q == 1 and over_price_coarse > 0:
-            over_price = over_price_coarse
+            if over_price == 0:
+                self.message_log("Can't calculate over price for reverse cycle", log_level=LogLevel.ERROR)
+                over_price = 2 * over_price_coarse
         else:
-            over_price = 0
+            over_price = over_price_coarse
         return over_price
 
     def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
@@ -2059,7 +2117,7 @@ class Strategy(StrategyBase):
 
     def start_process(self):
         # Init analytic
-        self.connection_analytic = self.connection_analytic or sqlite3.connect(WORK_PATH + DB_FILE,
+        self.connection_analytic = self.connection_analytic or sqlite3.connect(DB_FILE,
                                                                                check_same_thread=False,
                                                                                timeout=10)
         # Create processes for save to .db and send Telegram message
@@ -2684,6 +2742,9 @@ class Strategy(StrategyBase):
     def on_new_order_book(self, order_book: OrderBook) -> None:
         # print(f"on_new_order_book: max_bids: {order_book.bids[0].price}, min_asks: {order_book.asks[0].price}")
         pass
+    ##############################################################
+    # private update methods
+    ##############################################################
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
         # print(f"on_new_funds.funds: {funds}")
@@ -2720,10 +2781,6 @@ class Strategy(StrategyBase):
                                 self.grid_hold['allow_grid_shift'],
                                 self.grid_hold['additional_grid'],
                                 self.grid_hold['grid_update'])
-
-    ##############################################################
-    # private update methods
-    ##############################################################
 
     def on_order_update(self, update: OrderUpdate) -> None:
         # self.message_log(f"Order {update.original_order.id}: {update.status}", log_level=LogLevel.DEBUG)

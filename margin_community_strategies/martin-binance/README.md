@@ -10,7 +10,7 @@
 <h4 align="center">Other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a></h4>
 
 ***
-<h3 align="center">martin-binance <a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="20"></a> <--> exchanges-wrapper <a href="https://badge.fury.io/py/exchanges-wrapper"><img src="https://badge.fury.io/py/exchanges-wrapper.svg" alt="PyPI version" height="20"></a></h3>
+<h4 align="center">martin-binance <a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="20"></a> <--> exchanges-wrapper <a href="https://badge.fury.io/py/exchanges-wrapper"><img src="https://badge.fury.io/py/exchanges-wrapper.svg" alt="PyPI version" height="20"></a></h4>
 
 ***
 <h1 align="center"><a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability"><img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability"/></a>
@@ -35,6 +35,21 @@ Regardless of any trend, exchange overloads, network connection lost, hardware f
 All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
+## Important notices
+* From v1.2.7 work path relocated to ```home/user/.MartinBinance/```
+* From v1.2.7 changed format of ```home/user/.MartinBinance/config/ms_cfg.toml```
+* From v1.2.7 changed format of ```home/user/.MartinBinance/cli_7_BTCUSDT.py```
+
+* You cannot run multiple pairs with overlapping currencies on the same account!
+
+>Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
+> 
+>Incorrectly: (BTC/USDT), (ETH/USDT), (BTC/ETH)
+> 
+>As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
+
+* See <a href="#specific-ftx-requirements">Specific FTX requirements</a>
+
 ## Review
 <p align="center"><img src="https://gist.githubusercontent.com/DogsTailFarmer/b650b9b199666700d2839fb46d3aa1d7/raw/657ea8e7ad79df66d9d373776aeeb8614241f03f/architecture.svg"></p>
 
@@ -47,20 +62,9 @@ The system has two modes:
 * python_strategy modules can be used as plug-in trading strategy for multi-exchange terminal
 <a href="#margin">margin.de</a>, free demo, you can try it.
 
-Strategy logic realized at executor.py and trading parameters settings in the API_1_BTCBUSD.py (cli_7_BTCUSDT.py)
+Strategy logic realized at executor.py and trading parameters settings in the cli_1_AAABBB.py (cli_7_BTCUSDT.py)
 
 You can modify them for your needs. See <a href="#for-developers">For developers</a> section.
-
-## Important notices
-* You cannot run multiple pairs with overlapping currencies on the same account!
-
-Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
-
-Incorrectly: (BTC/USDT), (ETH/USDT), (BTC/ETH)
-
-As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
-
-* See <a href="#specific-ftx-requirements">Specific FTX requirements</a>
 
 ## Reference
 
@@ -88,6 +92,8 @@ As a result of the mutual impact on the operating balance sheet, the liquidity c
 
 ## Trade idea
 <p id="trade-idea"></p>
+
+<p align="center"><img src="https://user-images.githubusercontent.com/77513676/191544694-21f28b6f-9d6c-4258-b686-c29653dc9c77.png"></p>
 
 Create a grid of increasing volume orders and when they perform
 creation of one take profit order in the opposite direction.
@@ -147,70 +153,71 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 ```console
 pip install martin-binance
 ```
+After first install run ```exchanges_wrapper/exch_srv.py``` and ```martin_binance/cli_7_BTCUSDT.py```
+You can find this where pip installs packages, often it's ```/home/ubuntu/.local/lib/python3.10/site-packages```
 
-### Update
+The structure of the working directory will be created and the necessary files will be copied:
+For Ubuntu it will be here: ```home/user/.MartinBinance/```
 
-Before update save configurations file:
-* ```martin_binance/ms_cfg.toml```
-* ```exchanges_wrapper/exch_srv_cfg.toml```
-
-Also save ```martin_binance/last_state``` folder after manually stop strategy.
-
+For upgrade to latest versions use:
 ```console
-pip install martin-binance --upgrade
+pip install -U martin-binance
 ```
-After update for restore config use saved files. Before restart replace ```martin_binance/last_state``` from saved.
 
 #### Create Telegram bot
 * Register [Telegram bot](https://t.me/BotFather)
 * Get token
 * Find channel_id. Just start [IDBot](https://t.me/username_to_id_bot) and get channel_id
-* Specify this data into ```martin_binance/ms_cfg.toml``` for 'Demo - Binance', 7
+* Specify this data into ```/home/ubuntu/.MartinBinance/config/ms_cfg.toml``` for 'Demo - Binance', 7
 
 ### STANDALONE mode
 * Log in at [Binance Spot Test Network](https://testnet.binance.vision/)
 * Create API Key
 
 #### Start server
-* Specify api_key and api_secret in ```exchanges_wrapper/exch_srv_cfg.toml```
-* Run ```exchanges_wrapper/exch_srv.py``` in terminal window
+* Specify api_key and api_secret in ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```
+* Run ```exchanges_wrapper/exch_srv.py``` in terminal window.
 
 #### Start client
-* Run ```martin_binance/cli_7_BTCUSDT.py``` in other terminal window
+* Run ```/home/ubuntu/.MartinBinance/cli_7_BTCUSDT.py``` in other terminal window.
 
 Strategy is started.
 
 #### Setting trade pair
 You must set pair name in three places the same (yes, it is crooked, but so far):
-* base setting at bottom of the ```martin_binance/cli_X_AAABBB.py``` in "__main__" section, SYMBOL = 'AAABBB'
+* base setting at top of the ```cli_X_AAABBB.py```, ```ex.SYMBOL = 'AAABBB'```
 * the name of ```cli_X_AAABBB.py``` must match
-* the name of pane in <a href="#tmux">Tmux terminal window</a>
+* the ```X``` it is index of element from exchange list in ```config/ms_cfg.toml```
+
+>For 'Demo - Binance' and BTC/USDT trade pair it will be cli_7_BTCUSDT.py
+
+* the name of pane in <a href="#tmux">Tmux terminal window</a>, see explanation in the relevant section
 
 For stop strategy use Ctrl-C and/or Telegram control function
 
 ### MARGIN mode
-* Install [margin](https://margin.de/download/)
+*For different OS paths will be different, this example for Ubuntu*
 
-#### For Linux
-Extract [Linux_site-packages.tar.gz](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/Linux_site-packages.tar.gz)
+* Install [margin](https://margin.de/download/) to the ```~/opt/margin/```
 
-to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
-* Copy ```martin_binance/ms_cfg.toml``` and ```martin_binance/funds_rate.db``` to the ``` ~/margin-linux ```
-* Copy ```martin_binance/executor.py``` to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
+Change dir to the ```~/opt/margin/resources/python/lib/python3.7/site-packages/``` and install martin-binance there:
+```console
+pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps martin-binance
+```
 
-#### For Windows
-Extract [win_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/win_site-packages.zip)
+The margin terminal uses its own assembly Python3.7 which does not have some packages necessary for the strategy
+to work. They need to be installed.
+```console
+pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps -r ./martin_binance/margin/margin_req.txt
+```
 
-to the ```C:\Users\UserName\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
-* Copy ```martin_binance/ms_cfg.toml``` and ```martin_binance/funds_rate.db``` to the ```C:\Users\user\AppData\Local\Programs\margin```
-* Copy executor.py to the ```C:\Users\UserName\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
+* Rename  ```martin_binance/ms_cfg.toml.template``` to ```martin_binance/ms_cfg.toml```
+* Copy ```ms_cfg.toml``` and ```funds_rate.db``` to the margin install folder ```~/opt/margin/```
+* Create Telegram bot as described above and specify the data in ```ms_cfg.toml```
 
-#### For macOS
-Extract [MacOS_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/MacOS_site-packages.zip)
-
-to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7/site-packages```
-* Copy ms_cfg.toml and funds_rate.db to the ```/Users/current_user/.margin/```
-* Copy executor.py to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7/site-packages```
+For Ubuntu (Linux) check if exist file
+```~/opt/margin/resources/python/lib/python3.7/lib-dynload/_sqlite3.cpython-37m-x86_64-linux-gnu.so```
+and if not, copy it from ```martin_binance/margin/_sqlite3.cpython-37m-x86_64-linux-gnu.so```
 ***
 * Start margin in Demo mode
 * Add currency pair BTC/USDT
@@ -225,16 +232,17 @@ Strategy is started.
 
 #### Setting trade pair
 The selection of the pair is determined by the window of the terminal in which the strategy is launched.
-The "__ main __" section settings are ignored.
 
-### Add new exchange account
+### Add new exchange account (STANDALONE mode)
 <p id="add-new-exchange-account"></p>
 Adding an account is in two parts
 
-* For server, it is exchanges_wrapper/exch_srv_cfg.toml, where you place API key and *account name*
-* For client, it's martin_binance/ms_cfg.toml, where you add *account name* into exchange list
+* For server, it is ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```,
+where you place API key and *account name*
+* For client, it's ```/home/ubuntu/.MartinBinance/config/ms_cfg.toml```,
+where you add *account name* into exchange list and setup Telegram parameters
 
-The *account name* _must_ be identically for account.
+The *account name* _must_ be identically for server and client configs.
 
 ## Terminal Tmux (Linux)
 <p id="tmux"></p>
@@ -289,7 +297,7 @@ tmux new-session -s Trade
 * Change dir to the ```~/.local/lib/python3.8/site-packages/exchanges_wrapper```
 * Create new pane: Ctrl+B c
 * Rename pane 1: Ctrl+B + , 7-BTC/USDT Enter
-* Change dir to the ```~/martin_binance```
+* Change dir to the ```~/.MartinBinance```
 * Reboot system
 * Attach to the restored session:
 ~~~
