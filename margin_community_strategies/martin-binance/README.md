@@ -5,19 +5,24 @@
 
 <h2 align="center">Cyclic grid strategy for SPOT market</h2>
 
-<h3 align="center">Free trading system for crypto exchanges (Binance, FTX, )</h3>
+<h3 align="center">Free trading system for crypto exchanges (Binance, FTX, Bitfinex,)</h3>
+
+<h4 align="center">Other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a></h4>
 
 ***
-<a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version"></a>
-<a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability"><img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability"/></a>
+<h4 align="center">martin-binance <a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="20"></a> <--> exchanges-wrapper <a href="https://badge.fury.io/py/exchanges-wrapper"><img src="https://badge.fury.io/py/exchanges-wrapper.svg" alt="PyPI version" height="20"></a></h4>
+
+***
+<h1 align="center"><a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability"><img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability"/></a>
 <a href="https://deepsource.io/gh/DogsTailFarmer/martin-binance/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=resolved+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
 <a href="https://deepsource.io/gh/DogsTailFarmer/martin-binance/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=active+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
 <a href="https://lgtm.com/projects/g/DogsTailFarmer/martin-binance/alerts/"><img alt="Total alerts" src="https://img.shields.io/lgtm/alerts/g/DogsTailFarmer/martin-binance.svg?logo=lgtm&logoWidth=18"/></a>
 <a href="https://lgtm.com/projects/g/DogsTailFarmer/martin-binance/context:python"><img alt="Language grade: Python" src="https://img.shields.io/lgtm/grade/python/g/DogsTailFarmer/martin-binance.svg?logo=lgtm&logoWidth=18"/></a>
 <a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_martin-binance" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_martin-binance&metric=alert_status"/></a>
+<a href="https://pepy.tech/project/martin-binance" target="_blank"><img alt="Downloads" title="Downloads" src="https://pepy.tech/badge/martin-binance/month"/></a>
+</h1>
 
-Other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a>
-
+***
 ## The motto of the project
 
 **_Profitable, fault-tolerant, adaptable to the market. Started and forgot._**
@@ -29,6 +34,21 @@ Regardless of any trend, exchange overloads, network connection lost, hardware f
 
 All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
+
+## Important notices
+* From v1.2.7 work path relocated to ```home/user/.MartinBinance/```
+* From v1.2.7 changed format of ```home/user/.MartinBinance/config/ms_cfg.toml```
+* From v1.2.7 changed format of ```home/user/.MartinBinance/cli_7_BTCUSDT.py```
+
+* You cannot run multiple pairs with overlapping currencies on the same account!
+
+>Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
+> 
+>Incorrectly: (BTC/USDT), (ETH/USDT), (BTC/ETH)
+> 
+>As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
+
+* See <a href="#specific-ftx-requirements">Specific FTX requirements</a>
 
 ## Review
 <p align="center"><img src="https://gist.githubusercontent.com/DogsTailFarmer/b650b9b199666700d2839fb46d3aa1d7/raw/657ea8e7ad79df66d9d373776aeeb8614241f03f/architecture.svg"></p>
@@ -42,7 +62,7 @@ The system has two modes:
 * python_strategy modules can be used as plug-in trading strategy for multi-exchange terminal
 <a href="#margin">margin.de</a>, free demo, you can try it.
 
-Strategy logic realized at executor.py and trading parameters settings in the API_1_BTCBUSD.py (cli_7_BTCUSDT.py)
+Strategy logic realized at executor.py and trading parameters settings in the cli_1_AAABBB.py (cli_7_BTCUSDT.py)
 
 You can modify them for your needs. See <a href="#for-developers">For developers</a> section.
 
@@ -53,6 +73,8 @@ You can modify them for your needs. See <a href="#for-developers">For developers
 <a href="#features">Features</a>
 
 <a href="#quick-start">Quick start</a>
+
+<a href="#add-new-exchange-account">Add new exchange account</a>
 
 <a href="#tmux">Terminal Tmux for STANDALONE mode</a>
 
@@ -70,6 +92,8 @@ You can modify them for your needs. See <a href="#for-developers">For developers
 
 ## Trade idea
 <p id="trade-idea"></p>
+
+<p align="center"><img src="https://user-images.githubusercontent.com/77513676/191544694-21f28b6f-9d6c-4258-b686-c29653dc9c77.png"></p>
 
 Create a grid of increasing volume orders and when they perform
 creation of one take profit order in the opposite direction.
@@ -107,10 +131,11 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 * Calculation of the price overlap for the Reverse cycle for the profitable completion of the previous cycle
 * Use Average Directional Index indicator for best time starting Reverse cycle
 * Calculation of separate MAKER and TAKER fee
-* Shift grid orders (customizable) if the price is go way (before take profit placed) 
+* Shift grid orders (customizable) if the price is go way (before take profit placed)
+* Adapted size of the first order depending on the exchange's limitations
 * Fractional creation of grid for increase productivity (customizable)
 * Adaptive overlap price for grid on current market conditions (customizable) based on Bollinger Band
-* *NEW*: Update grid orders if market conditions change
+* Update grid orders if market conditions change
 * Adaptive profit setting on current market conditions (customizable) based on Bollinger Band
 * Adaptive grid orders quantity for initial and Reverse cycle
 * Stable operation in pump/dump conditions
@@ -128,54 +153,71 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 ```console
 pip install martin-binance
 ```
+After first install run ```exchanges_wrapper/exch_srv.py``` and ```martin_binance/cli_7_BTCUSDT.py```
+You can find this where pip installs packages, often it's ```/home/ubuntu/.local/lib/python3.10/site-packages```
+
+The structure of the working directory will be created and the necessary files will be copied:
+For Ubuntu it will be here: ```home/user/.MartinBinance/```
+
+For upgrade to latest versions use:
+```console
+pip install -U martin-binance
+```
+
 #### Create Telegram bot
 * Register [Telegram bot](https://t.me/BotFather)
 * Get token
 * Find channel_id. Just start [IDBot](https://t.me/username_to_id_bot) and get channel_id
-* Specify this data into ms_cfg.toml for 'Demo - Binance', 7
+* Specify this data into ```/home/ubuntu/.MartinBinance/config/ms_cfg.toml``` for 'Demo - Binance', 7
 
 ### STANDALONE mode
 * Log in at [Binance Spot Test Network](https://testnet.binance.vision/)
 * Create API Key
 
 #### Start server
-* Specify api_key and api_secret in ```exchanges_wrapper/exch_srv_cfg.toml```
-* Run ```exchanges_wrapper/exch_srv.py``` in terminal window
+* Specify api_key and api_secret in ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```
+* Run ```exchanges_wrapper/exch_srv.py``` in terminal window.
+
 #### Start client
-* Run cli_7_BTCUSDT.py in other terminal window
+* Run ```/home/ubuntu/.MartinBinance/cli_7_BTCUSDT.py``` in other terminal window.
 
 Strategy is started.
 
-Setting trade pair. You must set pair name in three places the same (yes, it is crooked, but so far):
-* base setting at bottom of the cli_X_AAABBB.py in "__main__" section, SYMBOL = 'AAABBB'
-* the name of cli_X_AAABBB.py must match
-* the name of pane in <a href="#tmux">Tmux terminal window</a>
+#### Setting trade pair
+You must set pair name in three places the same (yes, it is crooked, but so far):
+* base setting at top of the ```cli_X_AAABBB.py```, ```ex.SYMBOL = 'AAABBB'```
+* the name of ```cli_X_AAABBB.py``` must match
+* the ```X``` it is index of element from exchange list in ```config/ms_cfg.toml```
+
+>For 'Demo - Binance' and BTC/USDT trade pair it will be cli_7_BTCUSDT.py
+
+* the name of pane in <a href="#tmux">Tmux terminal window</a>, see explanation in the relevant section
 
 For stop strategy use Ctrl-C and/or Telegram control function
 
 ### MARGIN mode
-* Install [margin](https://margin.de/download/)
+*For different OS paths will be different, this example for Ubuntu*
 
-#### For Linux
-Extract [Linux_site-packages.tar.gz](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/Linux_site-packages.tar.gz)
+* Install [margin](https://margin.de/download/) to the ```~/opt/margin/```
 
-to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
-* Copy ms_cfg.toml and funds_rate.db to the ``` ~/margin-linux ```
-* Copy executor.py to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
+Change dir to the ```~/opt/margin/resources/python/lib/python3.7/site-packages/``` and install martin-binance there:
+```console
+pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps martin-binance
+```
 
-#### For Windows
-Extract [win_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/win_site-packages.zip)
+The margin terminal uses its own assembly Python3.7 which does not have some packages necessary for the strategy
+to work. They need to be installed.
+```console
+pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps -r ./martin_binance/margin/margin_req.txt
+```
 
-to the ```C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
-* Copy ms_cfg.toml and funds_rate.db to the ```C:\Users\user\AppData\Local\Programs\margin```
-* Copy executor.py to the ```C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
+* Rename  ```martin_binance/ms_cfg.toml.template``` to ```martin_binance/ms_cfg.toml```
+* Copy ```ms_cfg.toml``` and ```funds_rate.db``` to the margin install folder ```~/opt/margin/```
+* Create Telegram bot as described above and specify the data in ```ms_cfg.toml```
 
-#### For macOS
-Extract [MacOS_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/MacOS_site-packages.zip)
-
-to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7/site-packages```
-* Copy ms_cfg.toml and funds_rate.db to the ```/Users/current_user/.margin/```
-* Copy executor.py to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7/site-packages```
+For Ubuntu (Linux) check if exist file
+```~/opt/margin/resources/python/lib/python3.7/lib-dynload/_sqlite3.cpython-37m-x86_64-linux-gnu.so```
+and if not, copy it from ```martin_binance/margin/_sqlite3.cpython-37m-x86_64-linux-gnu.so```
 ***
 * Start margin in Demo mode
 * Add currency pair BTC/USDT
@@ -188,8 +230,19 @@ to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7
 
 Strategy is started.
 
-Setting trade pair. The selection of the pair is determined by the window of the terminal in which the strategy is
-launched. The "__ main __" section settings are ignored.
+#### Setting trade pair
+The selection of the pair is determined by the window of the terminal in which the strategy is launched.
+
+### Add new exchange account (STANDALONE mode)
+<p id="add-new-exchange-account"></p>
+Adding an account is in two parts
+
+* For server, it is ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```,
+where you place API key and *account name*
+* For client, it's ```/home/ubuntu/.MartinBinance/config/ms_cfg.toml```,
+where you add *account name* into exchange list and setup Telegram parameters
+
+The *account name* _must_ be identically for server and client configs.
 
 ## Terminal Tmux (Linux)
 <p id="tmux"></p>
@@ -244,7 +297,7 @@ tmux new-session -s Trade
 * Change dir to the ```~/.local/lib/python3.8/site-packages/exchanges_wrapper```
 * Create new pane: Ctrl+B c
 * Rename pane 1: Ctrl+B + , 7-BTC/USDT Enter
-* Change dir to the ```~/martin_binance```
+* Change dir to the ```~/.MartinBinance```
 * Reboot system
 * Attach to the restored session:
 ~~~
@@ -470,7 +523,8 @@ can be sent to Telegram bot.
 * stop - stop after end of cycle (if current cycle is reverse - only after back to direct cycle)
 * end - stop after end of cycle, direct and reverse, no difference
 
-All commands are sent as a reply to message from desired strategy. Use simple text message.
+All commands are sent as a reply to message from desired strategy. Use simple text message or menu items. For use menu 
+after first run strategy in Telegram bot use /start command once.
 If all is normal, you will receive a confirmation that the system has received the command within 10 seconds.
 
 ### Save data for external analytics
@@ -542,11 +596,17 @@ Use Telegram control function, described above.
 <p id="specific-ftx-requirements"></p>
 
 These comments relate to this strategy, perhaps for another algorithm these restrictions will not be significant.
-This strategy can be use on FTX only in fee free mode. If this condition is not met, when calculating the take
+
+* This strategy can be use on FTX only in fee free mode. If this condition is not met, when calculating the take
 profit order price, a giant gap is obtained between the first grid order and the take profit order.
 This is due to the large price change step and the large minimum order size.
-
 To get a Maker fee = 0% you need a stake 25 FTT. [Details here](https://help.ftx.com/hc/en-us/articles/360052410392). 
+
+* Have a small stock of assets for both currencies, over and above used for deposit. 0.1% of the deposit
+volume is enough. Otherwise, the exchange rejects the last grid order and the TP order, provided that there
+is an accurately available balance sheet.
+```[2022-08-27 04:17:26,560: ERROR] handle_errors.response.status >= 400: {'success': False, 'error': 'Not enough balances'}```
+*FTX support rejected this issue.*
 
 
 ## For developers
@@ -556,8 +616,7 @@ The modular open architecture of the project allows you to use it both as a read
 developing your own strategies. See Review chart for reference.
 
 Warning.
-Coverage of overridden [margin strategy-sdk](https://github.com/MarginOpenSource/strategy-sdk) and
-[binance.py](https://github.com/Th0rgal/binance.py) packages is significant but not complete.
+Coverage of overridden [margin strategy-sdk](https://github.com/MarginOpenSource/strategy-sdk) is significant but not complete.
 Only methods and functions required for normal operation of the presented strategy are implemented.
 Missing functionality can be implemented on yours own or on request.
 
@@ -603,6 +662,8 @@ fee
 
 Create account on [HUOBI](https://www.huobi.com/en-us/topic/double-reward/?invite_code=9uaw3223) and get 10% cashback
 on all trading fee
+
+Create account on [Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP) and get 6% rebate fee
 
 Create account on [FTX](https://ftx.com/profile#a=62025440)
 

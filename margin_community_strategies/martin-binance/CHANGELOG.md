@@ -1,3 +1,106 @@
+## v1.2.7 2022-09-18
+### Fixed
+* If it is not possible to calculate the price overlap for the cycle reverse, its value set to coarse estimate * 2
+instead of the OVER_PRICE
+* In saved state added StrategyBase.trades. This is for correct restore if order was filled partially
+
+### Update
+README.md - renewed installation chapter
+ 
+### Added for new features
+* Disconnecting the gRPC server is now safe, auto reconnect with full recovery of the current session
+
+## v1.2.6-8-hotfix 2022-09-03
+### Fixed
+* [File exist error on Windows 11](https://github.com/DogsTailFarmer/martin-binance/issues/19#issue-1360296628)
+
+## v1.2.6-7 2022-09-01
+### Fixed
+* Incorrect settings for max grid orders count at grid update (Filter failure: MIN_NOTIONAL)
+
+### Update
+* requirements.txt exchanges-wrapper>=1.2.4-5
+
+## v1.2.6 2022-08-27
+### Fixed
+* [Incomplete account setup](https://github.com/DogsTailFarmer/martin-binance/issues/17#issue-1347470971)
+
+### Update
+* up to Python 3.10.6
+* 1.2.5-3 update on_place_order_error_string() to avoid the cyclical sending of an order rejected by the exchange
+* [Update readme - limit for several pair with intersecting coin](https://github.com/DogsTailFarmer/martin-binance/issues/18#issue-1347575119)
+
+## v1.2.5 2022-08-20
+### Fixed
+* if not FEE_IN_PAIR and Reverse: underreporting of income as a result of excess fee accrual
+
+### Update
+* calculate round quote pattern
+* optimize place grid method
+
+### Added for new features
+* implemented first grid order volume calculating for effective FTX trading
+
+## v1.2.4 Hotfix - 2022-08-15 
+### Fixed
+* Incorrect calculation TP parameters for TP sell, price < 1, (fee + profit) amount < step_size
+
+## v1.2.3 - 2022-08-14
+### Fixed
+* [No status reply](https://github.com/DogsTailFarmer/martin-binance/issues/11#issue-1328210503)
+* [Stopped command in last state when low RAM](https://github.com/DogsTailFarmer/martin-binance/issues/14#issue-1333292978)
+
+### Added for new features
+* Protect against OS failures when saving a state file
+* [No help it Telegram bot](https://github.com/DogsTailFarmer/martin-binance/issues/8#issue-1315732905)
+For Telegram bot set up command menu and online help
+
+### Update
+* Dependencies
+* Refactoring calculate TP
+* Refactoring calculate over price
+
+## v1.2.2 - 2022-08-08
+### Update
+* Add \n on each input request
+* Handling HTTP 429 error for coinmarketcap
+
+## v1.2.1 - 2022-08-07
+### Fixed
+* Restore strategy from saved state after restart - get and handling missed event before the state was loaded
+* Max retries exceeded with url: * for Telegram requests.post()
+
+### Update
+* After restart save previous last state file into .bak
+
+## v1.2.0 - 2022-08-04
+### Added for new features
+* Bitfinex exchange for STANDALONE mode added
+* Control for first and last grid orders volume added
+* For `ex.STATUS_DELAY = 5  # Minute between sending Tlg message about current status, 0 - disable` parameter add
+ability to turn off
+
+### Fixed
+* Correct rounding for base and quote assets on different exchanges
+
+### Update
+* Refactoring method for calculate over price in Reverse cycle
+* Up https://pro.coinmarketcap.com API call to v2
+
+If you update from lower versions please change reference in
+`martin_binance/ms_cfg.toml` on next:
+
+    `# CoinMarketCap`
+
+    `url = "https://pro-api.coinmarketcap.com/v2/tools/price-conversion"`
+
+* ATTENTION: in the required package `exchanges-wrapper` was changed format config file
+`exchanges_wrapper/exch_srv_cfg.toml` from 1.2.0 version. Before update, save old file and transfer configuration
+data into new.
+* Finished implemented Decimal calculation for orders processing
+* Change data type for `REVERSE_TARGET_AMOUNT` parameter in `cli_XX_AAABBB.py`, update it before restart
+* Renewed Grafana template
+
 ## v1.1.0 - 2022-06-16
 ### Added for new features
 * FTX exchange for STANDALONE mode added
