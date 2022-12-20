@@ -6,7 +6,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7b1"
+__version__ = "1.2.10-6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -42,9 +42,13 @@ class Trade:
             self.wait_connection = True
             client = None
             while client is None:
-                client = await self.connect()
-                self.wait_connection = False
-            self.client = client
+                try:
+                    client = await self.connect()
+                except UserWarning:
+                    client = None
+                else:
+                    self.wait_connection = False
+                    self.client = client
 
     async def connect(self):
         try:
@@ -60,10 +64,11 @@ class Trade:
             if status_code == grpc.StatusCode.FAILED_PRECONDITION:
                 raise SystemExit(1)
             logger.info('Restart gRPC client session')
-            await asyncio.sleep(random.randint(1, 10))
-            return
+            await asyncio.sleep(random.randint(5, 15))
+            raise UserWarning
         else:
-            logger.info(f"gRPC session started for client_id: {_client.client_id}")
+            logger.info(f"gRPC session started for client_id: {_client.client_id}\n"
+                        f"trade_id: {self.trade_id}")
             return _client
 
     async def send_request(self, _request, _request_type, **kwargs):
@@ -76,18 +81,18 @@ class Trade:
                 pass  # Task cancellation should not be logged as an error.
             except grpc.RpcError as ex:
                 status_code = ex.code()
-                logger.error(f"Exception on send request: {status_code.name}, {ex.details()}")
                 if (
                     (status_code == grpc.StatusCode.UNAVAILABLE
-                     and ex.details() == 'failed to connect to all addresses')
+                     and 'failed to connect to all addresses' in (ex.details()))
                         or
-                    ((status_code == grpc.StatusCode.UNKNOWN
-                     and "'NoneType' object has no attribute 'client'" in ex.details()))
+                    (status_code == grpc.StatusCode.UNKNOWN
+                     and "'NoneType' object has no attribute 'client'" in ex.details())
                 ):
                     self.client = None
                     logger.warning("Connection to gRPC server failed, try reconnect...")
                     await self.get_client()
                 else:
+                    logger.error(f"Exception on send request {_request}: {status_code.name}, {ex.details()}")
                     raise
             else:
                 # logger.info(f"send_request.res: {res}")
@@ -108,7 +113,5 @@ class Trade:
                 status_code = ex.code()
                 logger.warning(f"Exception on WSS loop: {status_code.name}, {ex.details()}")
                 raise
-            finally:
-                return
         else:
             raise UserWarning("Start gRPC request loop failed, not active client session")
