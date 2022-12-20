@@ -1,3 +1,147 @@
+## v1.2.11 2022-12-20
+### Fixed
+* fix #43, import error in margin mode under Windows
+
+## v1.2.10-8 2022-12-15
+### Fixed
+* fix #42
+ 
+### Update
+* up requirements for exchanges-wrapper to 1.2.7-7
+
+## v1.2.10-7 2022-12-14
+### Fixed
+* fix #39, fix #40, fix #41
+* grid_handler: No grid orders after part filled TP, fixed additional order params
+and part code refactoring
+
+## v1.2.10-6 2022-12-08
+### Update
+* up requirements for exchanges-wrapper to 1.2.7-6
+* Some minor improvements
+
+## v1.2.10-5 2022-12-04
+### Update
+* OKX: adding delay in place_limit_order() for avoid exceeding the rate limit (60 orders / 2s)
+* Some minor improvements
+* up requirements for exchanges-wrapper to 1.2.7-5
+
+## v1.2.10-4 2022-11-25
+### Update
+* up requirements for exchanges-wrapper to 1.2.7-4
+
+## v1.2.10-3 2022-11-25
+### Fixed
+* saving the state for partially executed orders as float() instead of Decimal() causes an error when restarting
+from the saved state if the last snapshot contains partial execution data.
+
+## v1.2.10-2 2022-11-25
+### Fixed
+* save/restore internal order_id
+
+## v1.2.10-1 2022-11-24
+### Update
+* up requirements for exchanges-wrapper to 1.2.7-3
+
+## v1.2.10 2022-11-23
+### Update
+* internal numbering for orders
+* Processing of partial order execution events is linked to a specific order number.
+Previously, events were processed sequentially, which led to an error when the order of receiving events was violated.
+
+## v1.2.9-18 2022-11-21
+### Update
+* Dependency to exchanges-wrapper 1.2.7-1
+
+## v1.2.9-18 2022-11-21
+### Fixed
+* #36
+* #37
+
+## v1.2.9-14 2022-11-11
+### Fixed
+* After restart from saved state incorrect value for first_run may cause incorrect data to be saved
+for the start deposit. Because of this, the control of initial balances may not work correctly.
+* Calculate parameters for grid. Adding price limitation based on [PERCENT_PRICE](https://github.com/binance/binance-spot-api-docs/blob/master/filters.md#percent_price)
+filter. Without such limit, the task of finding grid parameters for a given volume has several solutions, including in
+the area of negative price values. This is an unlikely event that could have been within the Reverse buy cycle and
+high volatility
+
+### Update
+* Changed logic for place order error handling. Before - save to hold uncompleted order and wait event from exchange.
+Now - resend order after timeout.
+* Refactoring place_grid() and calc_grid()
+
+### Added for new features
+* Before start of cycle and in periodically report are showed free assets' data, what volume of coins does
+not participate in the turnover
+
+> 19/10 22:26:23 Start
+> 
+>Start process for .db save
+> 
+>Start process for Telegram
+> 
+>Number of unreachable objects collected by GC: 16
+> 
+>19/10 22:26:23 Initial first: 1.009025, second: 9829.04880062
+> 
+>**19/10 22:26:23 Free: First: 1.009025, second: 9629.04880062**
+> 
+>19/10 22:26:24 Start Buy cycle with 200.0 USDT depo
+
+* #7 Allow to withdraw and deposit on active strategy with autocorrection initial balance and depo. See
+[manual](https://github.com/DogsTailFarmer/martin-binance#deposit-and-withdraw-assets-on-active-strategy) for detail
+
+## v1.2.9-1 2022-10-14
+### Update
+* Refusal to use PROFIT_REVERSE parameter.
+Valid for Reverse cycle. For a small deposit, the cycle income can be equal to the minimum order size step.
+If you divide it into parts to increase the deposit and make a profit, as a result of rounding the deposit amount does
+not increase, which negatively affects the ability of the strategy to complete the reverse cycle.
+Instead, all cycle profits are allocated either to increase the deposit (for an odd cycle number)
+or to accumulate profits (for an even cycle number)
+
+## v1.2.9 2022-10-13
+### Added for new features
+* Huobi exchange implemented
+
+### Update
+* Dependency exchanges-wrapper==1.2.6
+
+## v1.2.8-2 2022-09-29
+### Fixed
+* For analytic export replace Bitfinex mapping from "IOTA to MIOTA" to "IOT to MIOTA"
+* Migration transition solution cleared for saved_state from 1.2.6 - > 1.2.7
+* lgtm [py/unused-import]
+
+### Update
+* get_min_buy_amount()
+
+## v1.2.8-1 2022-09-27
+### Fixed
+* For analytic export replace IOTA to MIOTA for Bitfinex
+
+### Update
+* dependency exchanges-wrapper up to 1.2.5-3 
+
+## v1.2.8 2022-09-26
+### Added for new features
+* Powered by [Docker](https://www.docker.com/) deploy
+
+## v1.2.7-1 2022-09-25
+### Fixed
+* #26 #29 - add preliminary calculation of grid parameters
+```console
+25/09 16:33:07 set_trade_conditions: buy_side: False, depo: 0.050000, base_price: 18950.35, reverse_target_amount: 0, amount_min: 0.000528, step_size: 0.000001, delta_min: 0.01
+25/09 16:33:07 set_trade_conditions: depo: 0.050000, order_q: 48, amount_first_grid: 0.000528, amount_2: 0.0005808, q_max: 24, coarse overprice: 1.210355
+25/09 16:33:07 For Sell cycle will be set 24 orders for 1.2104% over price
+```
+Before start, you can correct value depo and other trade parameters 
+
+* #30 Incorrect conversion to comparable currency at initial check of deposit volume
+* For analytic export replace IOT to IOTA for Bitfinex
+
 ## v1.2.7 2022-09-18
 ### Fixed
 * If it is not possible to calculate the price overlap for the cycle reverse, its value set to coarse estimate * 2
