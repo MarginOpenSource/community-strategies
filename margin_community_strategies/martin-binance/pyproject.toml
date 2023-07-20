@@ -19,7 +19,7 @@ requires-python = ">=3.8"
 dependencies = [
     "exchanges-wrapper==1.2.5-1",
     "margin-strategy-sdk==0.0.11",
-    "aiohttp==3.8.1",
+    "aiohttp==3.8.5",
     "grpcio==1.48.1",
     "grpcio-tools==1.48.1",
     "jsonpickle==2.2.0",
